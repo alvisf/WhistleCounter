@@ -35,10 +35,13 @@ final class SystemAlarmPlayer: AlarmPlayer {
     // MARK: - Private
 
     private func configureAudioSessionForAlarm() {
+        // `.playback` makes the alarm audible even when the ringer
+        // switch is muted. `.duckOthers` lowers any music/podcast
+        // audio while the alarm plays instead of fighting it.
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback,
                                  mode: .default,
-                                 options: [.mixWithOthers])
+                                 options: [.duckOthers])
         try? session.setActive(true, options: [])
     }
 

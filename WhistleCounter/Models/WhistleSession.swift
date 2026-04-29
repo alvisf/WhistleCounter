@@ -122,10 +122,11 @@ final class WhistleSession {
     }
 
     func stop() {
-        guard isListening else { return }
-        detector.stop()
-        isListening = false
         alarm?.stop()
+        if isListening {
+            detector.stop()
+            isListening = false
+        }
         archiveCurrentSessionIfNeeded()
     }
 
@@ -188,8 +189,21 @@ final class WhistleSession {
         history.append(clock())
         if count >= targetCount, !targetReached {
             targetReached = true
+            // Stop listening before firing the alarm so the mic's
+            // .playAndRecord session releases the audio graph and the
+            // alarm's .playback session can take over cleanly.
+            stopListeningForAlarm()
             alarm?.start(sound: activeAlarmSound)
         }
+    }
+
+    /// Tear down the detector's audio session without archiving or
+    /// clearing session state. Archival and state reset happen later
+    /// when the user dismisses the alert or hits Stop/Reset.
+    private func stopListeningForAlarm() {
+        guard isListening else { return }
+        detector.stop()
+        isListening = false
     }
 
     private func handleDetectorError(_ message: String) {
