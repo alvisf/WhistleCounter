@@ -13,7 +13,7 @@ enum AudioSessionManager {
         try session.setCategory(
             .playAndRecord,
             mode: .measurement,
-            options: [.defaultToSpeaker, .allowBluetoothHFP]
+            options: [.defaultToSpeaker, .allowBluetooth]
         )
         try session.setActive(true, options: [.notifyOthersOnDeactivation])
     }
