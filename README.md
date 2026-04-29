@@ -9,8 +9,13 @@ Built in SwiftUI with `AVAudioEngine` + `vDSP` for real-time FFT. All
 processing is on-device — no accounts, no cloud, no telemetry.
 
 <p align="center">
-  <img src="docs/screenshots/01-counter-light.png" width="260" alt="Counter tab (light)" />
-  <img src="docs/screenshots/01-counter-dark.png"  width="260" alt="Counter tab (dark)" />
+  <img src="docs/screenshots/01-counter-light.png" width="240" alt="Counter tab" />
+  <img src="docs/screenshots/02-recipes-light.png" width="240" alt="Recipes tab" />
+  <img src="docs/screenshots/03-history-light.png" width="240" alt="History tab" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/01-counter-dark.png" width="240" alt="Counter tab — dark mode" />
 </p>
 
 ## Features

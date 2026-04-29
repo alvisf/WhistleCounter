@@ -1,37 +1,44 @@
 # Screenshots
 
-The repo ships with two screenshots of the Counter tab (light + dark). The
-remaining screenshots (Recipes tab, History tab, Alarm sound picker) need
-to be captured manually because macOS UI automation is blocked by
-accessibility permissions.
+The repo ships with screenshots of the three main tabs (Counter, Recipes,
+History) plus a dark-mode Counter. These are regenerated from the iOS
+simulator using a mix of `xcrun simctl io screenshot` and `cliclick`
+for programmatic tapping.
 
-## How to add the remaining screenshots
+## How to regenerate
 
-1. Boot the simulator and install the app:
-   ```bash
-   xcrun simctl boot A51E1950-7C79-40B7-BBD2-B9B2D64AA50E
-   open -a Simulator
-   xcodebuild -project WhistleCounter.xcodeproj \
-     -scheme WhistleCounter \
-     -destination 'platform=iOS Simulator,id=A51E1950-7C79-40B7-BBD2-B9B2D64AA50E' \
-     -configuration Debug \
-     -derivedDataPath build \
-     build
-   xcrun simctl install booted build/Build/Products/Debug-iphonesimulator/WhistleCounter.app
-   xcrun simctl launch booted com.alvisf.WhistleCounter
-   ```
-2. Tap through each tab you want to capture.
-3. In the Simulator app, **File → Save Screen (⌘S)** saves a PNG to
-   `~/Desktop`. Rename and move to `docs/screenshots/` following the
-   naming convention below.
+```bash
+# macOS + cliclick required
+brew install cliclick
 
-## Naming convention
+# Ensure the app is installed and the simulator is booted
+xcrun simctl boot A51E1950-7C79-40B7-BBD2-B9B2D64AA50E   # or your device id
+open -a Simulator
+xcrun simctl launch booted com.alvisf.WhistleCounter
+
+# Counter — light + dark
+xcrun simctl ui booted appearance light
+xcrun simctl io booted screenshot docs/screenshots/01-counter-light.png
+xcrun simctl ui booted appearance dark
+xcrun simctl io booted screenshot docs/screenshots/01-counter-dark.png
+
+# Tap the Recipes tab (coords depend on your simulator window position)
+# Find the Simulator window bounds:
+#   osascript -e 'tell application "System Events" to tell process "Simulator" to get {position, size} of window 1'
+# Tab bar is ~80px from the bottom, Recipes is the middle tab.
+cliclick c:1852,1158  # adjust x/y for your setup
+xcrun simctl io booted screenshot docs/screenshots/02-recipes-light.png
+
+# History tab — right side of the tab bar
+cliclick c:2004,1158
+xcrun simctl io booted screenshot docs/screenshots/03-history-light.png
+```
+
+## Files
 
 | File | Contents |
 |---|---|
-| `01-counter-light.png` | Counter tab, light appearance (ships with repo) |
-| `01-counter-dark.png`  | Counter tab, dark appearance (ships with repo) |
-| `02-recipes.png`       | Recipes tab, light appearance |
-| `03-history.png`       | History tab with at least one saved session |
-| `04-alarm-picker.png`  | Counter → Alarm sound picker |
-| `05-recipe-edit.png`   | New/edit recipe sheet |
+| `01-counter-light.png` | Counter tab, light appearance |
+| `01-counter-dark.png`  | Counter tab, dark appearance |
+| `02-recipes-light.png` | Recipes tab with seeded recipes |
+| `03-history-light.png` | History tab (empty-state or populated) |
