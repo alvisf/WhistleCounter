@@ -65,6 +65,7 @@ final class WhistleSession {
 
     private let detector: WhistleDetector
     private let historyStore: HistoryStore?
+    private let alarm: AlarmPlayer?
     private let clock: () -> Date
 
     private var sessionStartedAt: Date?
@@ -74,10 +75,12 @@ final class WhistleSession {
     init(
         detector: WhistleDetector = DSPWhistleDetector(),
         historyStore: HistoryStore? = nil,
+        alarm: AlarmPlayer? = nil,
         clock: @escaping () -> Date = Date.init
     ) {
         self.detector = detector
         self.historyStore = historyStore
+        self.alarm = alarm
         self.clock = clock
         self.detector.configure(sensitivity: sensitivity)
         self.detector.onWhistleDetected = { [weak self] in
@@ -108,6 +111,7 @@ final class WhistleSession {
         guard isListening else { return }
         detector.stop()
         isListening = false
+        alarm?.stop()
         archiveCurrentSessionIfNeeded()
     }
 
@@ -118,10 +122,12 @@ final class WhistleSession {
         targetReached = false
         sessionStartedAt = nil
         activeRecipeName = nil
+        alarm?.stop()
     }
 
     func dismissTargetAlert() {
         targetReached = false
+        alarm?.stop()
     }
 
     /// Apply a recipe to the current session: sets `targetCount` and
@@ -153,8 +159,9 @@ final class WhistleSession {
     private func recordWhistle() {
         count += 1
         history.append(clock())
-        if count >= targetCount {
+        if count >= targetCount, !targetReached {
             targetReached = true
+            alarm?.start()
         }
     }
 

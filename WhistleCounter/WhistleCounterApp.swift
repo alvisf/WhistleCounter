@@ -9,7 +9,12 @@ struct WhistleCounterApp: App {
     init() {
         let history = HistoryStore()
         _history = State(initialValue: history)
-        _session = State(initialValue: WhistleSession(historyStore: history))
+        _session = State(
+            initialValue: WhistleSession(
+                historyStore: history,
+                alarm: SystemAlarmPlayer()
+            )
+        )
     }
 
     var body: some Scene {

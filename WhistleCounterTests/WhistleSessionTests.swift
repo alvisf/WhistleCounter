@@ -29,6 +29,15 @@ final class MockWhistleDetector: WhistleDetector {
 }
 
 @MainActor
+final class MockAlarmPlayer: AlarmPlayer {
+    private(set) var startCalls = 0
+    private(set) var stopCalls = 0
+
+    func start() { startCalls += 1 }
+    func stop() { stopCalls += 1 }
+}
+
+@MainActor
 final class WhistleSessionTests: XCTestCase {
 
     private func makeSession(
@@ -313,5 +322,64 @@ final class WhistleSessionTests: XCTestCase {
         let (session, _) = makeSession()
         session.apply(recipe: Recipe(name: "Rajma", whistleCount: 6))
         XCTAssertEqual(session.activeRecipeName, "Rajma")
+    }
+
+    // MARK: - Alarm
+
+    func testAlarm_startsWhenTargetReached() {
+        let alarm = MockAlarmPlayer()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, alarm: alarm)
+        session.targetCount = 2
+        session.start()
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.startCalls, 0)
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.startCalls, 1)
+    }
+
+    func testAlarm_doesNotRestartOnSubsequentWhistles() {
+        let alarm = MockAlarmPlayer()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, alarm: alarm)
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        mock.fireWhistle()
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.startCalls, 1)
+    }
+
+    func testAlarm_stopsWhenUserDismissesAlert() {
+        let alarm = MockAlarmPlayer()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, alarm: alarm)
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        session.dismissTargetAlert()
+        XCTAssertEqual(alarm.stopCalls, 1)
+    }
+
+    func testAlarm_stopsOnSessionStop() {
+        let alarm = MockAlarmPlayer()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, alarm: alarm)
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        session.stop()
+        XCTAssertGreaterThanOrEqual(alarm.stopCalls, 1)
+    }
+
+    func testAlarm_stopsOnReset() {
+        let alarm = MockAlarmPlayer()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, alarm: alarm)
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        session.reset()
+        XCTAssertGreaterThanOrEqual(alarm.stopCalls, 1)
     }
 }
