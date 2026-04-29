@@ -54,7 +54,8 @@
         background: transparent;
       }
 
-      /* Cooker body. Sized relative to the 1024px canvas. */
+      /* Cooker body. Rounded rectangle with a slight taper —
+         bottom is narrower than the top, like a traditional pot. */
       .cooker-body {
         position: absolute;
         left: 50%;
@@ -63,6 +64,13 @@
         width: 580px;
         height: 400px;
         border-radius: 70px;
+        /* Inset the bottom corners to taper the shape. */
+        clip-path: polygon(
+          0% 0%,      /* top-left  */
+          100% 0%,    /* top-right */
+          90% 100%,   /* bottom-right, pulled in */
+          10% 100%    /* bottom-left,  pulled in */
+        );
       }
 
       /* Cooker lid — slightly wider stripe just above the body. */
