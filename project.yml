@@ -2,7 +2,7 @@ name: WhistleCounter
 options:
   bundleIdPrefix: com.alvisf
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
   createIntermediateGroups: true
 
 settings:
@@ -26,7 +26,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.alvisf.WhistleCounter
         INFOPLIST_FILE: WhistleCounter/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
-        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         GENERATE_INFOPLIST_FILE: NO
 
   WhistleCounterTests:
@@ -39,7 +39,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.alvisf.WhistleCounterTests
-        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:

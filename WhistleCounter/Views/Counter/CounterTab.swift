@@ -1,6 +1,7 @@
 import SwiftUI
 
-struct ContentView: View {
+/// The Counter tab — the original single-screen experience.
+struct CounterTab: View {
     @Environment(WhistleSession.self) private var session
 
     var body: some View {
@@ -34,6 +35,6 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    CounterTab()
         .environment(WhistleSession())
 }

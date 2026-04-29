@@ -231,4 +231,87 @@ final class WhistleSessionTests: XCTestCase {
         mock.fireError("mic denied")
         XCTAssertEqual(session.errorMessage, "mic denied")
     }
+
+    // MARK: - Session archival to HistoryStore
+
+    private func makeHistoryStore() -> HistoryStore {
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("history-\(UUID().uuidString).json")
+        return HistoryStore(fileURL: tempFile)
+    }
+
+    func testStop_withZeroCount_doesNotArchive() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        session.stop()
+        XCTAssertTrue(history.records.isEmpty)
+    }
+
+    func testStop_withPositiveCount_archivesSession() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        mock.fireWhistle()
+        session.stop()
+        XCTAssertEqual(history.records.count, 1)
+    }
+
+    func testArchivedRecord_hasCorrectWhistleCount() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        mock.fireWhistle()
+        mock.fireWhistle()
+        session.stop()
+        XCTAssertEqual(history.records.first?.whistleCount, 2)
+    }
+
+    func testArchivedRecord_includesActiveRecipeName() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.apply(recipe: Recipe(name: "Rajma", whistleCount: 6))
+        session.start()
+        mock.fireWhistle()
+        session.stop()
+        XCTAssertEqual(history.records.first?.recipeName, "Rajma")
+    }
+
+    func testReset_archivesBeforeClearing() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        mock.fireWhistle()
+        session.reset()
+        XCTAssertEqual(history.records.count, 1)
+        XCTAssertEqual(session.count, 0)
+    }
+
+    func testReset_withZeroCount_doesNotArchive() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        session.reset()
+        XCTAssertTrue(history.records.isEmpty)
+    }
+
+    // MARK: - Recipe application
+
+    func testApplyRecipe_setsTargetCount() {
+        let (session, _) = makeSession()
+        session.apply(recipe: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(session.targetCount, 6)
+    }
+
+    func testApplyRecipe_setsActiveRecipeName() {
+        let (session, _) = makeSession()
+        session.apply(recipe: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(session.activeRecipeName, "Rajma")
+    }
 }

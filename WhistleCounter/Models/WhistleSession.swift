@@ -5,7 +5,8 @@ import Observation
 ///
 /// Owns the `WhistleDetector`, translates detection callbacks into
 /// state that SwiftUI views can render, and exposes control actions
-/// (start / stop / reset) to the UI.
+/// (start / stop / reset) to the UI. When a session ends with at
+/// least one whistle it is archived to the `HistoryStore`.
 @Observable
 @MainActor
 final class WhistleSession {
@@ -56,14 +57,28 @@ final class WhistleSession {
     /// Timestamps of each detected whistle in the current session.
     private(set) var history: [Date] = []
 
+    /// Name of the recipe selected for the current session, if any.
+    /// Set by the Recipes tab; cleared when the session is archived.
+    var activeRecipeName: String?
+
     // MARK: - Collaborators
 
     private let detector: WhistleDetector
+    private let historyStore: HistoryStore?
+    private let clock: () -> Date
+
+    private var sessionStartedAt: Date?
 
     // MARK: - Init
 
-    init(detector: WhistleDetector = DSPWhistleDetector()) {
+    init(
+        detector: WhistleDetector = DSPWhistleDetector(),
+        historyStore: HistoryStore? = nil,
+        clock: @escaping () -> Date = Date.init
+    ) {
         self.detector = detector
+        self.historyStore = historyStore
+        self.clock = clock
         self.detector.configure(sensitivity: sensitivity)
         self.detector.onWhistleDetected = { [weak self] in
             self?.recordWhistle()
@@ -81,6 +96,9 @@ final class WhistleSession {
         do {
             try detector.start()
             isListening = true
+            if sessionStartedAt == nil {
+                sessionStartedAt = clock()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -90,6 +108,7 @@ final class WhistleSession {
         guard isListening else { return }
         detector.stop()
         isListening = false
+        archiveCurrentSessionIfNeeded()
     }
 
     func reset() {
@@ -97,17 +116,43 @@ final class WhistleSession {
         count = 0
         history.removeAll()
         targetReached = false
+        sessionStartedAt = nil
+        activeRecipeName = nil
     }
 
     func dismissTargetAlert() {
         targetReached = false
     }
 
+    /// Apply a recipe to the current session: sets `targetCount` and
+    /// records the recipe name for history.
+    func apply(recipe: Recipe) {
+        targetCount = recipe.whistleCount
+        activeRecipeName = recipe.name
+    }
+
+    // MARK: - Session lifecycle
+
+    /// Persists the current session to history if at least one
+    /// whistle has been counted. Called automatically on stop and
+    /// reset, so views don't need to call it directly.
+    private func archiveCurrentSessionIfNeeded() {
+        guard count > 0, let start = sessionStartedAt else { return }
+        let record = SessionRecord(
+            startedAt: start,
+            endedAt: clock(),
+            whistleCount: count,
+            recipeName: activeRecipeName
+        )
+        historyStore?.append(record)
+        sessionStartedAt = nil
+    }
+
     // MARK: - Callbacks
 
     private func recordWhistle() {
         count += 1
-        history.append(Date())
+        history.append(clock())
         if count >= targetCount {
             targetReached = true
         }
@@ -119,10 +164,6 @@ final class WhistleSession {
     }
 
     // MARK: - Boundary clamping
-    //
-    // Defined as separate methods so the `didSet` observers stay small
-    // and easy to read. Each guards against the @Observable macro
-    // re-triggering `didSet` by only re-assigning when necessary.
 
     private func clampTargetCount() {
         if targetCount < Limits.minTargetCount {
