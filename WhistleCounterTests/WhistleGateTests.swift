@@ -91,4 +91,59 @@ final class WhistleGateTests: XCTestCase {
         // Second burst too soon — refractory suppresses it.
         XCTAssertEqual(fires, 1)
     }
+
+    // MARK: - Long-whistle behaviour
+
+    func testLongSingleWhistle_firesOnce_10s() {
+        // A pressure cooker whistle can be 1–10 s long. The gate must
+        // still report it as exactly one whistle.
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5
+        )
+        let fires = run(gate: &gate, ratio: 0.5, seconds: 10.0)
+        XCTAssertEqual(fires, 1, "A 10-second whistle must still be counted as one")
+    }
+
+    func testLongSingleWhistle_firesOnce_5s() {
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5
+        )
+        let fires = run(gate: &gate, ratio: 0.5, seconds: 5.0)
+        XCTAssertEqual(fires, 1)
+    }
+
+    func testLongWhistle_thenDrop_thenNew_fireTwice() {
+        // Long whistle, clean drop, new whistle = 2 counts.
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.0
+        )
+        var fires = 0
+        fires += run(gate: &gate, ratio: 0.5, seconds: 4.0, startingAt: 0.0)   // long whistle
+        fires += run(gate: &gate, ratio: 0.0, seconds: 1.2, startingAt: 4.0)   // silence gap
+        fires += run(gate: &gate, ratio: 0.5, seconds: 1.0, startingAt: 5.2)   // new whistle
+        XCTAssertEqual(fires, 2)
+    }
+
+    func testBriefDropoutMidWhistle_doesNotDoubleCount() {
+        // Sometimes the detector will see a one-frame dropout in the
+        // middle of a single whistle (buffer edge, transient noise).
+        // That should NOT produce two counts — the refractory window
+        // absorbs it.
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5
+        )
+        var fires = 0
+        fires += run(gate: &gate, ratio: 0.5, seconds: 1.0, startingAt: 0.0)   // whistle starts
+        fires += run(gate: &gate, ratio: 0.0, seconds: 0.05, startingAt: 1.0)  // brief dropout
+        fires += run(gate: &gate, ratio: 0.5, seconds: 1.0, startingAt: 1.05)  // continues
+        XCTAssertEqual(fires, 1, "A brief dropout in the middle of a whistle must not produce a second count")
+    }
 }

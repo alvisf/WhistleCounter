@@ -240,40 +240,69 @@ struct WhistleGate {
     var minDurationSec: Double
     var refractorySec: Double
 
+    /// How long the signal must stay BELOW threshold before we treat
+    /// the current whistle as "ended". This absorbs brief dropouts
+    /// (single-frame noise, buffer edges) that would otherwise split
+    /// one whistle into two.
+    var minGapSec: Double = 0.2
+
     private var activeSinceTime: TimeInterval?
+    private var belowSinceTime: TimeInterval?
     private var lastFireTime: TimeInterval = -.infinity
+    private var hasFiredForCurrentBurst: Bool = false
 
     init(
         thresholdRatio: Float,
         minDurationSec: Double,
-        refractorySec: Double
+        refractorySec: Double,
+        minGapSec: Double = 0.2
     ) {
         self.thresholdRatio = thresholdRatio
         self.minDurationSec = minDurationSec
         self.refractorySec = refractorySec
+        self.minGapSec = minGapSec
     }
 
     /// Feed one frame's energy ratio in. Returns `true` exactly once
     /// per detected whistle.
+    ///
+    /// A whistle is defined as a contiguous "above threshold" period
+    /// — with short dropouts of up to `minGapSec` absorbed as part of
+    /// the same whistle. A single burst that lasts 10 seconds still
+    /// counts as one whistle.
     mutating func process(energyRatio: Float, now: TimeInterval) -> Bool {
         let aboveThreshold = energyRatio >= thresholdRatio
 
         if aboveThreshold {
+            // Signal is above threshold. Cancel any pending "end of
+            // whistle" timer — this keeps the current burst alive
+            // through brief dropouts.
+            belowSinceTime = nil
+
             if activeSinceTime == nil {
                 activeSinceTime = now
             }
             let sustained = now - (activeSinceTime ?? now)
             let sinceLastFire = now - lastFireTime
-            if sustained >= minDurationSec, sinceLastFire >= refractorySec {
+            if !hasFiredForCurrentBurst,
+               sustained >= minDurationSec,
+               sinceLastFire >= refractorySec {
                 lastFireTime = now
-                // Keep activeSinceTime set — we won't fire again until
-                // the signal drops below threshold AND then comes back.
-                // That's enforced by resetting `activeSinceTime` when
-                // the ratio drops below threshold.
+                hasFiredForCurrentBurst = true
                 return true
             }
         } else {
-            activeSinceTime = nil
+            // Signal is below threshold. Start (or continue) a "maybe
+            // whistle ended" timer. We only consider the burst over
+            // once we've been below for at least `minGapSec`.
+            if belowSinceTime == nil {
+                belowSinceTime = now
+            }
+            let belowFor = now - (belowSinceTime ?? now)
+            if belowFor >= minGapSec {
+                activeSinceTime = nil
+                hasFiredForCurrentBurst = false
+            }
         }
         return false
     }
