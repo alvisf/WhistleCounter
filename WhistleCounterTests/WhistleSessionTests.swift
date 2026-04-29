@@ -445,4 +445,65 @@ final class WhistleSessionTests: XCTestCase {
         let name = "WhistleSessionTests.\(UUID().uuidString)"
         return UserDefaults(suiteName: name)!
     }
+
+    // MARK: - startFresh
+
+    func testStartFresh_startsListening() {
+        let (session, _) = makeSession()
+        session.startFresh(with: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertTrue(session.isListening)
+    }
+
+    func testStartFresh_setsTargetCountFromRecipe() {
+        let (session, _) = makeSession()
+        session.startFresh(with: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(session.targetCount, 6)
+    }
+
+    func testStartFresh_setsActiveRecipeName() {
+        let (session, _) = makeSession()
+        session.startFresh(with: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(session.activeRecipeName, "Rajma")
+    }
+
+    func testStartFresh_archivesPreviousSessionIfItHadWhistles() {
+        let history = makeHistoryStore()
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock, historyStore: history)
+        session.start()
+        mock.fireWhistle()
+        session.startFresh(with: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(history.records.count, 1)
+    }
+
+    func testStartFresh_clearsCountForNewSession() {
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(detector: mock)
+        session.start()
+        mock.fireWhistle()
+        mock.fireWhistle()
+        session.startFresh(with: Recipe(name: "Rajma", whistleCount: 6))
+        XCTAssertEqual(session.count, 0)
+    }
+
+    // MARK: - hasActiveSession
+
+    func testHasActiveSession_falseWhenStopped() {
+        let (session, _) = makeSession()
+        XCTAssertFalse(session.hasActiveSession)
+    }
+
+    func testHasActiveSession_trueWhileListening() {
+        let (session, _) = makeSession()
+        session.start()
+        XCTAssertTrue(session.hasActiveSession)
+    }
+
+    func testHasActiveSession_trueWhenCountIsPositiveEvenAfterStop() {
+        let (session, mock) = makeSession()
+        session.start()
+        mock.fireWhistle()
+        session.stop()
+        XCTAssertTrue(session.hasActiveSession)
+    }
 }

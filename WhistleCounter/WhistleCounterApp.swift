@@ -5,6 +5,7 @@ struct WhistleCounterApp: App {
     @State private var recipes = RecipeStore()
     @State private var history = HistoryStore()
     @State private var alarmSounds = AlarmSoundStore()
+    @State private var tabs = TabSelection()
     @State private var session: WhistleSession
 
     init() {
@@ -28,6 +29,7 @@ struct WhistleCounterApp: App {
                 .environment(recipes)
                 .environment(history)
                 .environment(alarmSounds)
+                .environment(tabs)
         }
     }
 }

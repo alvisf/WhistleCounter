@@ -65,6 +65,12 @@ final class WhistleSession {
     /// `apply(recipe:)`; otherwise falls back to the store's default.
     var activeAlarmSound: AlarmSound
 
+    /// True when there is meaningful session state that the user
+    /// would lose if we started a new session on top of it.
+    var hasActiveSession: Bool {
+        isListening || count > 0
+    }
+
     // MARK: - Collaborators
 
     private let detector: WhistleDetector
@@ -147,6 +153,15 @@ final class WhistleSession {
         activeAlarmSound = recipe.alarmSound
             ?? alarmSoundStore?.defaultSound
             ?? .default
+    }
+
+    /// Replace any in-progress session with a fresh one for the given
+    /// recipe, then start listening. Used when the user taps a recipe
+    /// in the Recipes tab.
+    func startFresh(with recipe: Recipe) {
+        reset()
+        apply(recipe: recipe)
+        start()
     }
 
     // MARK: - Session lifecycle

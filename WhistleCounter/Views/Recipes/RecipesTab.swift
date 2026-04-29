@@ -3,17 +3,18 @@ import SwiftUI
 struct RecipesTab: View {
     @Environment(RecipeStore.self) private var store
     @Environment(WhistleSession.self) private var session
+    @Environment(TabSelection.self) private var tabs
 
     @State private var editing: Recipe?
     @State private var isAdding = false
-    @State private var selectedRecipeID: Recipe.ID?
+    @State private var pendingRecipe: Recipe?
 
     var body: some View {
         NavigationStack {
-            List(selection: $selectedRecipeID) {
+            List {
                 ForEach(store.recipes) { recipe in
                     RecipeRow(recipe: recipe) {
-                        session.apply(recipe: recipe)
+                        handleTap(recipe)
                     }
                     .swipeActions(edge: .trailing) {
                         Button("Delete", role: .destructive) {
@@ -60,7 +61,50 @@ struct RecipesTab: View {
                     ))
                 }
             }
+            .confirmationDialog(
+                "Replace current session?",
+                isPresented: replaceSessionConfirmation,
+                titleVisibility: .visible,
+                presenting: pendingRecipe
+            ) { recipe in
+                Button("Replace", role: .destructive) {
+                    startRecipe(recipe)
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingRecipe = nil
+                }
+            } message: { _ in
+                Text("A session is in progress. Starting a new recipe will end it.")
+            }
         }
+    }
+
+    // MARK: - Tap handling
+
+    private func handleTap(_ recipe: Recipe) {
+        if session.hasActiveSession {
+            pendingRecipe = recipe
+        } else {
+            startRecipe(recipe)
+        }
+    }
+
+    private func startRecipe(_ recipe: Recipe) {
+        session.startFresh(with: recipe)
+        tabs.select(.counter)
+        pendingRecipe = nil
+    }
+
+    /// Drives the confirmation dialog. `pendingRecipe != nil` means
+    /// the user tapped a recipe while a session was active and we're
+    /// waiting for them to confirm or cancel.
+    private var replaceSessionConfirmation: Binding<Bool> {
+        Binding(
+            get: { pendingRecipe != nil },
+            set: { newValue in
+                if !newValue { pendingRecipe = nil }
+            }
+        )
     }
 }
 
@@ -80,9 +124,9 @@ private struct RecipeRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
             }
         }
     }
@@ -92,4 +136,6 @@ private struct RecipeRow: View {
     RecipesTab()
         .environment(WhistleSession())
         .environment(RecipeStore(fileURL: URL(filePath: "/tmp/recipes-preview.json")))
+        .environment(AlarmSoundStore())
+        .environment(TabSelection())
 }

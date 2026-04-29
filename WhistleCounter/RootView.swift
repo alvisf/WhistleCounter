@@ -5,16 +5,19 @@ struct RootView: View {
     @Environment(WhistleSession.self) private var session
     @Environment(RecipeStore.self) private var recipes
     @Environment(HistoryStore.self) private var history
+    @Environment(TabSelection.self) private var tabs
 
     var body: some View {
-        TabView {
-            Tab("Counter", systemImage: "timer") {
+        @Bindable var tabs = tabs
+
+        TabView(selection: $tabs.current) {
+            Tab("Counter", systemImage: "timer", value: TabSelection.Tab.counter) {
                 CounterTab()
             }
-            Tab("Recipes", systemImage: "book.pages.fill") {
+            Tab("Recipes", systemImage: "book.pages.fill", value: TabSelection.Tab.recipes) {
                 RecipesTab()
             }
-            Tab("History", systemImage: "clock.arrow.circlepath") {
+            Tab("History", systemImage: "clock.arrow.circlepath", value: TabSelection.Tab.history) {
                 HistoryTab()
             }
         }
@@ -26,4 +29,5 @@ struct RootView: View {
         .environment(WhistleSession())
         .environment(RecipeStore(fileURL: URL(filePath: "/tmp/recipes-preview.json")))
         .environment(HistoryStore(fileURL: URL(filePath: "/tmp/history-preview.json")))
+        .environment(TabSelection())
 }
