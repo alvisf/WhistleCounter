@@ -113,22 +113,27 @@ private struct RecipeRow: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(recipe.name)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                    Text("^[\(recipe.whistleCount) whistle](inflect: true)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(recipe.name)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                Text("^[\(recipe.whistleCount) whistle](inflect: true)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            Spacer()
+            Button(action: onTap) {
+                Image(systemName: "play.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
     }
 }
 

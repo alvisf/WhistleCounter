@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Clock-app-style Liquid Glass pills: centered label, no icon,
+/// tinted to the button's role (green = start, red = stop).
 struct ControlsView: View {
     @Environment(WhistleSession.self) private var session
 
@@ -17,20 +19,24 @@ struct ControlsView: View {
 
     private var listenToggleButton: some View {
         Button(action: toggleListening) {
-            Label(listenTitle, systemImage: listenSystemImage)
+            Text(listenTitle)
+                .font(.title3.weight(.semibold))
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(.glass)
         .tint(session.isListening ? .red : .green)
+        .controlSize(.large)
     }
 
     private var resetButton: some View {
         Button(action: session.reset) {
-            Label("Reset", systemImage: "arrow.counterclockwise")
+            Text("Reset")
+                .font(.title3.weight(.semibold))
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
         .controlSize(.large)
     }
 
@@ -41,14 +47,8 @@ struct ControlsView: View {
             .multilineTextAlignment(.center)
     }
 
-    // MARK: - Listen button appearance
-
     private var listenTitle: String {
         session.isListening ? "Stop" : "Start"
-    }
-
-    private var listenSystemImage: String {
-        session.isListening ? "stop.fill" : "play.fill"
     }
 
     private func toggleListening() {
@@ -63,4 +63,5 @@ struct ControlsView: View {
 #Preview {
     ControlsView()
         .environment(WhistleSession())
+        .padding()
 }

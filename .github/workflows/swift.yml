@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-test:
     name: Build & test on iOS Simulator
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -29,7 +29,7 @@ jobs:
       - name: Find an iPhone simulator
         run: |
           DEVICE_ID=$(xcrun simctl list devices available \
-            | grep -E "iPhone 1[567]" \
+            | grep -E "iPhone 1[78]" \
             | head -1 \
             | grep -oE '[A-F0-9-]{36}')
           echo "Using simulator $DEVICE_ID"
