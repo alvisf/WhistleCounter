@@ -3,10 +3,17 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(WhistleSession.self) private var session
 
+    private enum Layout {
+        static let cardCornerRadius: CGFloat = 12
+        static let rowSpacing: CGFloat = 14
+        static let targetRange: ClosedRange<Int> = 1...20
+        static let sensitivityRange: ClosedRange<Double> = 0...1
+    }
+
     var body: some View {
         @Bindable var session = session
 
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Layout.rowSpacing) {
             HStack {
                 Text("Target")
                     .font(.subheadline)
@@ -14,7 +21,7 @@ struct SettingsView: View {
                 Stepper(
                     "\(session.targetCount)",
                     value: $session.targetCount,
-                    in: 1...20
+                    in: Layout.targetRange
                 )
                 .fixedSize()
             }
@@ -24,21 +31,24 @@ struct SettingsView: View {
                     Text("Sensitivity")
                         .font(.subheadline)
                     Spacer()
-                    Text(sensitivityLabel(session.sensitivity))
+                    Text(sensitivityLabel(for: session.sensitivity))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Slider(value: $session.sensitivity, in: 0...1)
+                Slider(value: $session.sensitivity, in: Layout.sensitivityRange)
             }
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: Layout.cardCornerRadius)
                 .fill(Color(.secondarySystemBackground))
         )
     }
 
-    private func sensitivityLabel(_ value: Double) -> String {
+    /// Maps a sensitivity value in [0, 1] to a human-readable label.
+    /// The slider is reversed in meaning (`0` = most sensitive), which
+    /// is why low values show "Very high".
+    private func sensitivityLabel(for value: Double) -> String {
         switch value {
         case ..<0.25: "Very high"
         case ..<0.5:  "High"

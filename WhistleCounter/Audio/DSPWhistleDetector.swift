@@ -4,37 +4,45 @@ import Foundation
 
 /// FFT-based whistle detector.
 ///
-/// Pipeline for each incoming audio buffer:
-/// 1. Mix-down to mono float samples.
-/// 2. Slide a Hann-windowed FFT (size = `fftSize`) over them.
-/// 3. Compute power in the whistle band (2–4 kHz) vs. total power.
-/// 4. Feed the ratio into a state machine (`WhistleGate`) that
-///    requires the ratio to stay above threshold for `minDurationMs`
-///    and enforces a `refractoryMs` cooldown between whistles.
+/// For each incoming audio buffer the detector:
+///   1. Applies a Hann window to `FFTSize` samples.
+///   2. Runs a real-to-complex forward FFT using `vDSP`.
+///   3. Computes the fraction of spectral power in the whistle band
+///      (`BandLowHz`..`BandHighHz`) vs. total power.
+///   4. Feeds that ratio into a `WhistleGate` which decides whether
+///      the frame represents a new whistle event.
 ///
-/// The state machine lives inline rather than in its own file to keep
-/// the hot-path logic readable in one place; it's pure (no I/O, no
-/// audio types) and is directly unit-tested.
+/// `WhistleGate` is a separate, pure value type (see `WhistleGate.swift`)
+/// so the detection policy can be unit-tested without real audio.
 final class DSPWhistleDetector: WhistleDetector {
 
-    // MARK: - Tunables
+    // MARK: - Tuning constants
 
-    /// Power-of-two FFT size. 1024 @ 44.1 kHz ≈ 23 ms per frame, plenty
-    /// of frequency resolution for a 2–4 kHz tone.
-    private let fftSize = 1024
+    private enum FFT {
+        /// Power-of-two FFT size. 1024 @ 44.1 kHz ≈ 23 ms per frame,
+        /// which gives ~43 Hz resolution — plenty for a 2–4 kHz band.
+        static let size: Int = 1024
+    }
 
-    /// Whistle band (Hz). A pressure cooker whistle has a strong
-    /// fundamental in this range.
-    private let bandLowHz: Float = 2000
-    private let bandHighHz: Float = 4000
+    private enum WhistleBand {
+        /// Lower edge of the whistle band in Hz. A pressure-cooker
+        /// whistle has a strong fundamental in this range.
+        static let lowHz: Float = 2000
+        static let highHz: Float = 4000
+    }
 
-    /// Minimum duration (ms) the band-energy ratio must stay above
-    /// threshold to count as a whistle (filters out clicks/pops).
-    private let minDurationMs: Double = 300
+    private enum GateDefaults {
+        static let fireRatio: Float = 0.30
+        static let minDurationSec: Double = 0.30
+        static let minIntervalBetweenFiresSec: Double = 1.5
+    }
 
-    /// Minimum gap (ms) between two consecutive whistles (prevents a
-    /// single long whistle from being counted multiple times).
-    private let refractoryMs: Double = 1500
+    private enum SensitivityMapping {
+        /// `sensitivity = 0` → `fireRatio = minFireRatio`  (most sensitive)
+        /// `sensitivity = 1` → `fireRatio = maxFireRatio`  (least sensitive)
+        static let minFireRatio: Double = 0.10
+        static let maxFireRatio: Double = 0.60
+    }
 
     // MARK: - Callbacks
 
@@ -44,15 +52,16 @@ final class DSPWhistleDetector: WhistleDetector {
     // MARK: - State
 
     private let engine = AVAudioEngine()
+
+    /// FFT scratch owned by the detector. Touched only from the audio
+    /// thread after `start`; `nonisolated(unsafe)` documents that
+    /// invariant.
     nonisolated(unsafe) private var fftSetup: vDSP.FFT<DSPSplitComplex>?
     nonisolated(unsafe) private var hannWindow: [Float] = []
-
-    /// Gate that collapses per-frame energy ratios into discrete
-    /// whistle events. Mutated only from the audio thread after `start`.
     nonisolated(unsafe) private var gate = WhistleGate(
-        thresholdRatio: 0.30,
-        minDurationSec: 0.30,
-        refractorySec: 1.5
+        thresholdRatio: GateDefaults.fireRatio,
+        minDurationSec: GateDefaults.minDurationSec,
+        refractorySec: GateDefaults.minIntervalBetweenFiresSec
     )
 
     private var isRunning = false
@@ -60,7 +69,7 @@ final class DSPWhistleDetector: WhistleDetector {
     // MARK: - Init
 
     init() {
-        let log2n = vDSP_Length(log2(Double(fftSize)))
+        let log2n = vDSP_Length(log2(Double(FFT.size)))
         self.fftSetup = vDSP.FFT(
             log2n: log2n,
             radix: .radix2,
@@ -69,7 +78,7 @@ final class DSPWhistleDetector: WhistleDetector {
         self.hannWindow = vDSP.window(
             ofType: Float.self,
             usingSequence: .hanningNormalized,
-            count: fftSize,
+            count: FFT.size,
             isHalfWindow: false
         )
     }
@@ -77,11 +86,10 @@ final class DSPWhistleDetector: WhistleDetector {
     // MARK: - WhistleDetector
 
     func configure(sensitivity: Double) {
-        // sensitivity: 0 = most sensitive (low threshold), 1 = least.
-        // Map to threshold ratio in roughly [0.10, 0.60].
         let clamped = min(max(sensitivity, 0), 1)
-        let threshold = 0.10 + (0.50 * clamped)
-        gate.thresholdRatio = Float(threshold)
+        let range = SensitivityMapping.maxFireRatio - SensitivityMapping.minFireRatio
+        let mapped = SensitivityMapping.minFireRatio + clamped * range
+        gate.fireRatio = Float(mapped)
     }
 
     @MainActor
@@ -110,233 +118,145 @@ final class DSPWhistleDetector: WhistleDetector {
         isRunning = false
     }
 
-    // MARK: - Private
+    // MARK: - Engine lifecycle
 
     @MainActor
     private func startEngine() {
         do {
             try AudioSessionManager.configure()
-
-            let input = engine.inputNode
-            let format = input.inputFormat(forBus: 0)
-            let sampleRate = Float(format.sampleRate)
-
-            input.installTap(
-                onBus: 0,
-                bufferSize: AVAudioFrameCount(fftSize),
-                format: format
-            ) { [weak self] buffer, _ in
-                self?.process(buffer: buffer, sampleRate: sampleRate)
-            }
-
-            engine.prepare()
-            try engine.start()
+            try installTapAndStartEngine()
             isRunning = true
         } catch {
             onError?("Failed to start audio engine: \(error.localizedDescription)")
         }
     }
 
-    /// Called on a real-time audio thread. MUST NOT allocate or block.
-    nonisolated private func process(
+    @MainActor
+    private func installTapAndStartEngine() throws {
+        let input = engine.inputNode
+        let format = input.inputFormat(forBus: 0)
+        let sampleRate = Float(format.sampleRate)
+
+        input.installTap(
+            onBus: 0,
+            bufferSize: AVAudioFrameCount(FFT.size),
+            format: format
+        ) { [weak self] buffer, _ in
+            self?.processAudioFrame(buffer: buffer, sampleRate: sampleRate)
+        }
+
+        engine.prepare()
+        try engine.start()
+    }
+
+    // MARK: - Audio thread
+
+    /// Called on a real-time audio thread. Must not allocate large
+    /// buffers, take locks, or block.
+    nonisolated private func processAudioFrame(
         buffer: AVAudioPCMBuffer,
         sampleRate: Float
     ) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
-        let frameCount = Int(buffer.frameLength)
-        guard frameCount >= fftSize else { return }
+        guard let channelData = buffer.floatChannelData?[0],
+              Int(buffer.frameLength) >= FFT.size else {
+            return
+        }
 
-        // Take the first `fftSize` frames for analysis. For a tap size
-        // of fftSize this is the whole buffer.
-        let ratio = bandEnergyRatio(
-            samples: channelData,
-            sampleRate: sampleRate
+        let ratio = bandEnergyRatio(samples: channelData, sampleRate: sampleRate)
+        let fired = gate.process(
+            energyRatio: ratio,
+            now: Date().timeIntervalSinceReferenceDate
         )
-
-        let now = Date().timeIntervalSinceReferenceDate
-        let fired = gate.process(energyRatio: ratio, now: now)
-        if fired {
-            Task { @MainActor [weak self] in
-                self?.onWhistleDetected?()
-            }
+        guard fired else { return }
+        Task { @MainActor [weak self] in
+            self?.onWhistleDetected?()
         }
     }
 
-    /// Compute ratio of power in [bandLowHz, bandHighHz] to total
-    /// power in the spectrum. Returns 0 on any failure.
+    // MARK: - DSP
+
+    /// Ratio of spectral power in the whistle band to total spectral
+    /// power, in the range [0, 1]. Returns 0 if the FFT setup is
+    /// missing or the spectrum is silent.
     nonisolated private func bandEnergyRatio(
         samples: UnsafePointer<Float>,
         sampleRate: Float
     ) -> Float {
         guard let fftSetup else { return 0 }
 
-        // Apply Hann window to the input.
-        var windowed = [Float](repeating: 0, count: fftSize)
+        let windowed = applyHannWindow(to: samples)
+        let magnitudesSquared = forwardFFTMagnitudesSquared(
+            windowed: windowed,
+            fftSetup: fftSetup
+        )
+        return bandPowerRatio(
+            magnitudesSquared: magnitudesSquared,
+            sampleRate: sampleRate
+        )
+    }
+
+    nonisolated private func applyHannWindow(
+        to samples: UnsafePointer<Float>
+    ) -> [Float] {
+        var windowed = [Float](repeating: 0, count: FFT.size)
         vDSP.multiply(
-            UnsafeBufferPointer(start: samples, count: fftSize),
+            UnsafeBufferPointer(start: samples, count: FFT.size),
             hannWindow,
             result: &windowed
         )
+        return windowed
+    }
 
-        // Pack real samples into split-complex form for vDSP FFT.
-        let halfN = fftSize / 2
-        var realp = [Float](repeating: 0, count: halfN)
-        var imagp = [Float](repeating: 0, count: halfN)
+    nonisolated private func forwardFFTMagnitudesSquared(
+        windowed: [Float],
+        fftSetup: vDSP.FFT<DSPSplitComplex>
+    ) -> [Float] {
+        let halfN = FFT.size / 2
+        var realParts = [Float](repeating: 0, count: halfN)
+        var imagParts = [Float](repeating: 0, count: halfN)
+        var magnitudesSquared = [Float](repeating: 0, count: halfN)
 
-        var ratio: Float = 0
-
-        realp.withUnsafeMutableBufferPointer { realBuf in
-            imagp.withUnsafeMutableBufferPointer { imagBuf in
+        realParts.withUnsafeMutableBufferPointer { realBuf in
+            imagParts.withUnsafeMutableBufferPointer { imagBuf in
                 var split = DSPSplitComplex(
                     realp: realBuf.baseAddress!,
                     imagp: imagBuf.baseAddress!
                 )
-                windowed.withUnsafeBufferPointer { wptr in
-                    wptr.baseAddress!.withMemoryRebound(
+
+                // Pack interleaved real samples into split-complex form.
+                windowed.withUnsafeBufferPointer { buffer in
+                    buffer.baseAddress!.withMemoryRebound(
                         to: DSPComplex.self,
                         capacity: halfN
-                    ) { typed in
-                        vDSP_ctoz(typed, 2, &split, 1, vDSP_Length(halfN))
+                    ) { complexView in
+                        vDSP_ctoz(complexView, 2, &split, 1, vDSP_Length(halfN))
                     }
                 }
 
-                // Forward FFT in-place.
                 fftSetup.forward(input: split, output: &split)
-
-                // Magnitude squared per bin.
-                var magSq = [Float](repeating: 0, count: halfN)
-                vDSP.squareMagnitudes(split, result: &magSq)
-
-                // Convert bin index → Hz: binHz = sampleRate / fftSize.
-                let binHz = sampleRate / Float(fftSize)
-                let lowBin = max(1, Int(bandLowHz / binHz))
-                let highBin = min(halfN - 1, Int(bandHighHz / binHz))
-
-                let totalPower = magSq.reduce(0, +)
-                guard totalPower > 0, highBin > lowBin else {
-                    return
-                }
-                var bandPower: Float = 0
-                for i in lowBin...highBin {
-                    bandPower += magSq[i]
-                }
-                ratio = bandPower / totalPower
+                vDSP.squareMagnitudes(split, result: &magnitudesSquared)
             }
         }
 
-        return ratio
-    }
-}
-
-// MARK: - WhistleGate
-
-/// Pure state machine that converts a per-frame band-energy ratio
-/// stream into discrete whistle events with duration + refractory
-/// guarantees.
-///
-/// Split out so it can be unit-tested without audio.
-struct WhistleGate {
-    /// Energy ratio at or above which the signal is considered "whistle on".
-    var thresholdRatio: Float
-
-    /// How long the signal must stay above threshold before we fire.
-    var minDurationSec: Double
-
-    /// Minimum gap between two CONFIRMED whistles — measured from the
-    /// previous fire time. Prevents the same whistle from being
-    /// counted twice even if its amplitude briefly dips and comes back.
-    var refractorySec: Double
-
-    /// How long the signal must stay cleanly BELOW `releaseRatio`
-    /// before we consider the current whistle over and arm the gate
-    /// to fire again. Needs to be longer than typical mid-whistle
-    /// amplitude wobbles.
-    var minGapSec: Double = 0.5
-
-    /// Hysteresis. Once a whistle is firing, we only treat amplitude
-    /// dips as "signal dropped" if they go below this lower ratio.
-    /// Defaults to 60% of the fire threshold.
-    var releaseRatio: Float {
-        thresholdRatio * 0.6
+        return magnitudesSquared
     }
 
-    /// States:
-    ///  - `.idle`        — waiting for a rise above threshold.
-    ///  - `.pending(start)` — currently above threshold, accumulating
-    ///                        sustain time toward `minDurationSec`.
-    ///  - `.firing(belowSinceTime?)` — we've already fired for this
-    ///                        whistle. We ignore further crossings
-    ///                        until we've been below `releaseRatio`
-    ///                        for a continuous `minGapSec`, at which
-    ///                        point we go back to `.idle`.
-    private enum State {
-        case idle
-        case pending(start: TimeInterval)
-        case firing(belowSince: TimeInterval?)
-    }
+    nonisolated private func bandPowerRatio(
+        magnitudesSquared: [Float],
+        sampleRate: Float
+    ) -> Float {
+        let binCount = magnitudesSquared.count
+        let hzPerBin = sampleRate / Float(FFT.size)
+        let lowBin = max(1, Int(WhistleBand.lowHz / hzPerBin))
+        let highBin = min(binCount - 1, Int(WhistleBand.highHz / hzPerBin))
+        let totalPower = magnitudesSquared.reduce(0, +)
 
-    private var state: State = .idle
-    private var lastFireTime: TimeInterval = -.infinity
+        guard totalPower > 0, highBin > lowBin else { return 0 }
 
-    init(
-        thresholdRatio: Float,
-        minDurationSec: Double,
-        refractorySec: Double,
-        minGapSec: Double = 0.5
-    ) {
-        self.thresholdRatio = thresholdRatio
-        self.minDurationSec = minDurationSec
-        self.refractorySec = refractorySec
-        self.minGapSec = minGapSec
-    }
-
-    /// Feed one frame's energy ratio in. Returns `true` exactly once
-    /// per detected whistle, regardless of its length (1 s or 10 s)
-    /// and regardless of amplitude wobbles within the whistle.
-    mutating func process(energyRatio: Float, now: TimeInterval) -> Bool {
-        let aboveFire = energyRatio >= thresholdRatio
-        let belowRelease = energyRatio < releaseRatio
-
-        switch state {
-        case .idle:
-            if aboveFire {
-                state = .pending(start: now)
-            }
-
-        case .pending(let start):
-            if aboveFire {
-                let sustained = now - start
-                let sinceLastFire = now - lastFireTime
-                if sustained >= minDurationSec, sinceLastFire >= refractorySec {
-                    lastFireTime = now
-                    state = .firing(belowSince: nil)
-                    return true
-                }
-            } else if belowRelease {
-                // Dropped before we fired — back to idle.
-                state = .idle
-            }
-            // else: between releaseRatio and thresholdRatio, hold.
-
-        case .firing(let belowSince):
-            if belowRelease {
-                // Track how long we've been cleanly below.
-                let since = belowSince ?? now
-                if belowSince == nil {
-                    state = .firing(belowSince: now)
-                } else if now - since >= minGapSec {
-                    // Whistle is truly over, arm for a new one.
-                    state = .idle
-                }
-            } else {
-                // Signal came back up before `minGapSec` elapsed —
-                // treat as still part of the same whistle.
-                if belowSince != nil {
-                    state = .firing(belowSince: nil)
-                }
-            }
+        var bandPower: Float = 0
+        for bin in lowBin...highBin {
+            bandPower += magnitudesSquared[bin]
         }
-
-        return false
+        return bandPower / totalPower
     }
 }

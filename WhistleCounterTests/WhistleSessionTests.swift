@@ -1,8 +1,8 @@
 import XCTest
 @testable import WhistleCounter
 
-/// A stand-in `WhistleDetector` used to drive `WhistleSession`
-/// without touching real audio hardware.
+/// A stand-in `WhistleDetector` that records interactions from tests
+/// and exposes helpers to simulate detection events.
 @MainActor
 final class MockWhistleDetector: WhistleDetector {
     var onWhistleDetected: (() -> Void)?
@@ -24,115 +24,211 @@ final class MockWhistleDetector: WhistleDetector {
         lastSensitivity = sensitivity
     }
 
-    /// Test helper — simulate a real detection event.
     func fireWhistle() { onWhistleDetected?() }
-
-    /// Test helper — simulate a detection error.
     func fireError(_ message: String) { onError?(message) }
 }
 
 @MainActor
 final class WhistleSessionTests: XCTestCase {
 
-    func testInitialState() {
-        let session = WhistleSession(detector: MockWhistleDetector())
+    private func makeSession(
+        mock: MockWhistleDetector = MockWhistleDetector()
+    ) -> (WhistleSession, MockWhistleDetector) {
+        (WhistleSession(detector: mock), mock)
+    }
+
+    // MARK: - Initial state
+
+    func testInitialCount_isZero() {
+        let (session, _) = makeSession()
         XCTAssertEqual(session.count, 0)
+    }
+
+    func testInitially_isNotListening() {
+        let (session, _) = makeSession()
         XCTAssertFalse(session.isListening)
+    }
+
+    func testInitialTargetCount_isThree() {
+        let (session, _) = makeSession()
         XCTAssertEqual(session.targetCount, 3)
+    }
+
+    func testInitially_targetNotReached() {
+        let (session, _) = makeSession()
         XCTAssertFalse(session.targetReached)
+    }
+
+    func testInitially_hasNoErrorMessage() {
+        let (session, _) = makeSession()
         XCTAssertNil(session.errorMessage)
     }
 
+    // MARK: - Start / stop
+
     func testStart_setsIsListening() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+        let (session, _) = makeSession()
         session.start()
         XCTAssertTrue(session.isListening)
+    }
+
+    func testStart_callsDetectorStart() {
+        let (session, mock) = makeSession()
+        session.start()
         XCTAssertEqual(mock.startCalls, 1)
     }
 
-    func testStart_propagatesErrorAndStaysStopped() {
-        let mock = MockWhistleDetector()
+    func testStart_whenDetectorThrows_staysStopped() {
+        let (session, mock) = makeSession()
         mock.shouldThrowOnStart = NSError(
             domain: "Test", code: 1,
             userInfo: [NSLocalizedDescriptionKey: "nope"]
         )
-        let session = WhistleSession(detector: mock)
         session.start()
         XCTAssertFalse(session.isListening)
+    }
+
+    func testStart_whenDetectorThrows_propagatesErrorMessage() {
+        let (session, mock) = makeSession()
+        mock.shouldThrowOnStart = NSError(
+            domain: "Test", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "nope"]
+        )
+        session.start()
         XCTAssertEqual(session.errorMessage, "nope")
     }
 
-    func testStop_isIdempotent() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    func testStop_isIdempotent_detectorStoppedOnlyOnce() {
+        let (session, mock) = makeSession()
         session.start()
         session.stop()
         session.stop()
-        XCTAssertFalse(session.isListening)
         XCTAssertEqual(mock.stopCalls, 1)
     }
 
-    func testDetection_incrementsCountAndHistory() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    // MARK: - Detection
+
+    func testDetection_incrementsCount() {
+        let (session, mock) = makeSession()
         session.start()
         mock.fireWhistle()
         mock.fireWhistle()
         XCTAssertEqual(session.count, 2)
+    }
+
+    func testDetection_appendsToHistory() {
+        let (session, mock) = makeSession()
+        session.start()
+        mock.fireWhistle()
+        mock.fireWhistle()
         XCTAssertEqual(session.history.count, 2)
     }
 
-    func testDetection_hittingTarget_setsTargetReached() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    func testDetection_belowTarget_targetNotReached() {
+        let (session, mock) = makeSession()
         session.targetCount = 2
         session.start()
         mock.fireWhistle()
         XCTAssertFalse(session.targetReached)
+    }
+
+    func testDetection_hittingTarget_setsTargetReached() {
+        let (session, mock) = makeSession()
+        session.targetCount = 2
+        session.start()
+        mock.fireWhistle()
         mock.fireWhistle()
         XCTAssertTrue(session.targetReached)
     }
 
-    func testReset_clearsEverything() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    // MARK: - Reset
+
+    func testReset_clearsCount() {
+        let (session, mock) = makeSession()
         session.start()
         mock.fireWhistle()
         mock.fireWhistle()
         session.reset()
         XCTAssertEqual(session.count, 0)
+    }
+
+    func testReset_clearsHistory() {
+        let (session, mock) = makeSession()
+        session.start()
+        mock.fireWhistle()
+        session.reset()
         XCTAssertTrue(session.history.isEmpty)
+    }
+
+    func testReset_stopsListening() {
+        let (session, _) = makeSession()
+        session.start()
+        session.reset()
         XCTAssertFalse(session.isListening)
+    }
+
+    func testReset_clearsTargetReached() {
+        let (session, mock) = makeSession()
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        session.reset()
         XCTAssertFalse(session.targetReached)
     }
 
-    func testSensitivity_isClampedAndForwarded() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    // MARK: - Sensitivity clamping
+
+    func testSensitivity_aboveMax_isClampedToOne() {
+        let (session, _) = makeSession()
         session.sensitivity = 1.5
         XCTAssertEqual(session.sensitivity, 1.0)
-        XCTAssertEqual(mock.lastSensitivity, 1.0)
+    }
 
+    func testSensitivity_aboveMax_isForwardedClampedToDetector() {
+        let (session, mock) = makeSession()
+        session.sensitivity = 1.5
+        XCTAssertEqual(mock.lastSensitivity, 1.0)
+    }
+
+    func testSensitivity_belowMin_isClampedToZero() {
+        let (session, _) = makeSession()
         session.sensitivity = -0.5
         XCTAssertEqual(session.sensitivity, 0.0)
+    }
+
+    func testSensitivity_belowMin_isForwardedClampedToDetector() {
+        let (session, mock) = makeSession()
+        session.sensitivity = -0.5
         XCTAssertEqual(mock.lastSensitivity, 0.0)
     }
 
-    func testDetectorError_stopsSessionAndShowsMessage() {
-        let mock = MockWhistleDetector()
-        let session = WhistleSession(detector: mock)
+    // MARK: - Target-count clamping
+
+    func testTargetCount_zero_isClampedToOne() {
+        let (session, _) = makeSession()
+        session.targetCount = 0
+        XCTAssertEqual(session.targetCount, 1)
+    }
+
+    func testTargetCount_negative_isClampedToOne() {
+        let (session, _) = makeSession()
+        session.targetCount = -5
+        XCTAssertEqual(session.targetCount, 1)
+    }
+
+    // MARK: - Detector error handling
+
+    func testDetectorError_stopsSession() {
+        let (session, mock) = makeSession()
         session.start()
         mock.fireError("mic denied")
         XCTAssertFalse(session.isListening)
-        XCTAssertEqual(session.errorMessage, "mic denied")
     }
 
-    func testTargetCount_isClampedAboveZero() {
-        let session = WhistleSession(detector: MockWhistleDetector())
-        session.targetCount = 0
-        XCTAssertEqual(session.targetCount, 1)
-        session.targetCount = -5
-        XCTAssertEqual(session.targetCount, 1)
+    func testDetectorError_setsErrorMessage() {
+        let (session, mock) = makeSession()
+        session.start()
+        mock.fireError("mic denied")
+        XCTAssertEqual(session.errorMessage, "mic denied")
     }
 }

@@ -6,39 +6,56 @@ struct ControlsView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                Button {
-                    if session.isListening {
-                        session.stop()
-                    } else {
-                        session.start()
-                    }
-                } label: {
-                    Label(
-                        session.isListening ? "Stop" : "Start",
-                        systemImage: session.isListening ? "stop.fill" : "play.fill"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(session.isListening ? .red : .green)
-
-                Button {
-                    session.reset()
-                } label: {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                listenToggleButton
+                resetButton
             }
-
             if let error = session.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                errorLabel(error)
             }
+        }
+    }
+
+    private var listenToggleButton: some View {
+        Button(action: toggleListening) {
+            Label(listenTitle, systemImage: listenSystemImage)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(session.isListening ? .red : .green)
+    }
+
+    private var resetButton: some View {
+        Button(action: session.reset) {
+            Label("Reset", systemImage: "arrow.counterclockwise")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
+    private func errorLabel(_ message: String) -> some View {
+        Text(message)
+            .font(.caption)
+            .foregroundStyle(.red)
+            .multilineTextAlignment(.center)
+    }
+
+    // MARK: - Listen button appearance
+
+    private var listenTitle: String {
+        session.isListening ? "Stop" : "Start"
+    }
+
+    private var listenSystemImage: String {
+        session.isListening ? "stop.fill" : "play.fill"
+    }
+
+    private func toggleListening() {
+        if session.isListening {
+            session.stop()
+        } else {
+            session.start()
         }
     }
 }

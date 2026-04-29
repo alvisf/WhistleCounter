@@ -10,9 +10,22 @@ import Observation
 @MainActor
 final class WhistleSession {
 
+    // MARK: - Tuning constants
+
+    private enum Defaults {
+        static let targetCount: Int = 3
+        static let sensitivity: Double = 0.5
+    }
+
+    private enum Limits {
+        static let minTargetCount: Int = 1
+        static let minSensitivity: Double = 0
+        static let maxSensitivity: Double = 1
+    }
+
     // MARK: - Public state
 
-    /// Whistles detected in the current session.
+    /// Number of whistles detected in the current session.
     private(set) var count: Int = 0
 
     /// Whether the detector is actively listening.
@@ -21,46 +34,42 @@ final class WhistleSession {
     /// User-facing error message, if any (e.g. mic permission denied).
     private(set) var errorMessage: String?
 
-    /// Target whistle count. When `count` reaches this, `targetReached`
-    /// flips true and the UI shows an alert.
-    var targetCount: Int = 3 {
-        didSet {
-            if targetCount < 1 { targetCount = 1 }
-        }
+    /// Target whistle count. When `count` reaches this value,
+    /// `targetReached` flips to true and the UI shows an alert.
+    var targetCount: Int = Defaults.targetCount {
+        didSet { clampTargetCount() }
     }
 
-    /// Detection threshold as a normalized energy ratio in [0, 1].
-    /// Higher = less sensitive (fewer false positives, more misses).
-    var sensitivity: Double = 0.5 {
+    /// Detection sensitivity in [0, 1].
+    /// Higher value = less sensitive (fewer false positives, more misses).
+    var sensitivity: Double = Defaults.sensitivity {
         didSet {
-            let clamped = min(max(sensitivity, 0), 1)
-            if sensitivity != clamped {
-                sensitivity = clamped
-            }
+            clampSensitivity()
             detector.configure(sensitivity: sensitivity)
         }
     }
 
-    /// True when `count >= targetCount` and the user hasn't dismissed
-    /// the alert yet.
+    /// True when the target count has just been reached and the user
+    /// has not yet dismissed the alert.
     private(set) var targetReached: Bool = false
 
-    /// Timestamps of each detected whistle for this session.
+    /// Timestamps of each detected whistle in the current session.
     private(set) var history: [Date] = []
 
-    // MARK: - Init
+    // MARK: - Collaborators
 
     private let detector: WhistleDetector
+
+    // MARK: - Init
 
     init(detector: WhistleDetector = DSPWhistleDetector()) {
         self.detector = detector
         self.detector.configure(sensitivity: sensitivity)
         self.detector.onWhistleDetected = { [weak self] in
-            self?.handleWhistle()
+            self?.recordWhistle()
         }
         self.detector.onError = { [weak self] message in
-            self?.errorMessage = message
-            self?.isListening = false
+            self?.handleDetectorError(message)
         }
     }
 
@@ -94,13 +103,37 @@ final class WhistleSession {
         targetReached = false
     }
 
-    // MARK: - Private
+    // MARK: - Callbacks
 
-    private func handleWhistle() {
+    private func recordWhistle() {
         count += 1
         history.append(Date())
         if count >= targetCount {
             targetReached = true
+        }
+    }
+
+    private func handleDetectorError(_ message: String) {
+        errorMessage = message
+        isListening = false
+    }
+
+    // MARK: - Boundary clamping
+    //
+    // Defined as separate methods so the `didSet` observers stay small
+    // and easy to read. Each guards against the @Observable macro
+    // re-triggering `didSet` by only re-assigning when necessary.
+
+    private func clampTargetCount() {
+        if targetCount < Limits.minTargetCount {
+            targetCount = Limits.minTargetCount
+        }
+    }
+
+    private func clampSensitivity() {
+        let clamped = min(max(sensitivity, Limits.minSensitivity), Limits.maxSensitivity)
+        if sensitivity != clamped {
+            sensitivity = clamped
         }
     }
 }
