@@ -22,7 +22,12 @@
         /* Warm domestic palette. */
         --bg-top:      #e8794a; /* terracotta */
         --bg-bottom:   #b84b27; /* deeper rust */
-        --cooker:      #f5e6d3; /* cream */
+
+        /* Cream body — gradient top (light) to bottom (darker). */
+        --cream-top:      #fcf3e4;
+        --cream-mid:      #f5e6d3;
+        --cream-bottom:   #d8c4a8;
+
         --accent:      #3a1f15; /* dark cocoa */
         --cooker-dark: #e0d5c5; /* dimmer cream for dark variant */
         --tint:        #ffffff; /* white, iOS applies user tint */
@@ -142,11 +147,30 @@
 
       /* ---- Per-variant fills ---- */
 
-      /* ANY */
-      body[data-variant="any"] .cooker-body,
-      body[data-variant="any"] .cooker-lid,
+      /* ANY — vertical gradients give the cream shapes a subtle
+         "rounded surface" feeling without faking a full 3D render.
+         iOS 26 will add its own Liquid Glass specular on top. */
+      body[data-variant="any"] .cooker-body {
+        background: linear-gradient(
+          180deg,
+          var(--cream-top)    0%,
+          var(--cream-mid)   55%,
+          var(--cream-bottom) 100%
+        );
+      }
+      body[data-variant="any"] .cooker-lid {
+        background: linear-gradient(
+          180deg,
+          var(--cream-top)    0%,
+          var(--cream-mid)   100%
+        );
+      }
       body[data-variant="any"] .handle {
-        background: var(--cooker);
+        background: linear-gradient(
+          180deg,
+          var(--cream-mid)     0%,
+          var(--cream-bottom) 100%
+        );
       }
       body[data-variant="any"] .whistle-stem,
       body[data-variant="any"] .whistle-cap {
@@ -164,10 +188,10 @@
       }
       body[data-variant="dark"] .whistle-stem,
       body[data-variant="dark"] .whistle-cap {
-        background: var(--cooker);
+        background: var(--cream-mid);
       }
       body[data-variant="dark"] .steam {
-        border-color: var(--cooker);
+        border-color: var(--cream-mid);
       }
 
       /* TINTED — everything white on transparent; iOS tints it. */
