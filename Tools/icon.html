@@ -1,0 +1,196 @@
+<!doctype html>
+<!--
+  WhistleCounter app icon.
+
+  Renders a 1024x1024 icon in three variants via ?variant= query param:
+    any     — opaque terracotta gradient background
+    dark    — transparent background, elements only
+    tinted  — monochrome on transparent
+
+  Rasterized to PNG by Tools/generate-icons.sh using headless Chrome.
+  The page is intentionally minimal: no fonts, no images, no JS
+  frameworks — so rendering is deterministic across Chrome versions.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>WhistleCounter icon</title>
+    <style>
+      :root {
+        --size: 1024px;
+
+        /* Warm domestic palette. */
+        --bg-top:      #e8794a; /* terracotta */
+        --bg-bottom:   #b84b27; /* deeper rust */
+        --cooker:      #f5e6d3; /* cream */
+        --accent:      #3a1f15; /* dark cocoa */
+        --cooker-dark: #e0d5c5; /* dimmer cream for dark variant */
+        --tint:        #ffffff; /* white, iOS applies user tint */
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        width: var(--size);
+        height: var(--size);
+        background: transparent;
+      }
+
+      .canvas {
+        position: relative;
+        width: var(--size);
+        height: var(--size);
+        overflow: hidden;
+      }
+
+      /* Variant: any (light mode / opaque). */
+      body[data-variant="any"] .canvas {
+        background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      }
+
+      /* Variant: dark (transparent, iOS composites the system dark material). */
+      body[data-variant="dark"] .canvas,
+      body[data-variant="tinted"] .canvas {
+        background: transparent;
+      }
+
+      /* Cooker body. Sized relative to the 1024px canvas. */
+      .cooker-body {
+        position: absolute;
+        left: 50%;
+        top: 54%;
+        transform: translate(-50%, -50%);
+        width: 580px;
+        height: 400px;
+        border-radius: 70px;
+      }
+
+      /* Cooker lid — slightly wider stripe just above the body. */
+      .cooker-lid {
+        position: absolute;
+        left: 50%;
+        top: 39%;
+        transform: translate(-50%, -50%);
+        width: 640px;
+        height: 56px;
+        border-radius: 28px;
+      }
+
+      /* Handles. */
+      .handle {
+        position: absolute;
+        top: 58%;
+        width: 78px;
+        height: 36px;
+        border-radius: 18px;
+      }
+      .handle-left  { left: 150px; }
+      .handle-right { right: 150px; }
+
+      /* Whistle stem + cap. */
+      .whistle-stem {
+        position: absolute;
+        left: 50%;
+        top: 30%;
+        transform: translate(-50%, 0);
+        width: 52px;
+        height: 92px;
+        border-radius: 26px;
+      }
+      .whistle-cap {
+        position: absolute;
+        left: 50%;
+        top: 29%;
+        transform: translate(-50%, -50%);
+        width: 112px;
+        height: 42px;
+        border-radius: 21px;
+      }
+
+      /* Steam arcs rendered as bordered half-circles via box-shadow. */
+      .steam {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 50%;
+        background: transparent;
+      }
+      .steam.inner {
+        width: 240px;
+        height: 240px;
+        top: 35px;
+        border: 28px solid transparent;
+      }
+      .steam.outer {
+        width: 360px;
+        height: 360px;
+        top: -70px;
+        border: 28px solid transparent;
+      }
+      /* Show only the top portion of each circle by clipping the
+         lower half. Using clip-path for crisp rounded stroke ends. */
+      .steam.inner { clip-path: polygon(0 0, 100% 0, 100% 55%, 0 55%); }
+      .steam.outer { clip-path: polygon(0 0, 100% 0, 100% 55%, 0 55%); }
+
+      /* ---- Per-variant fills ---- */
+
+      /* ANY */
+      body[data-variant="any"] .cooker-body,
+      body[data-variant="any"] .cooker-lid,
+      body[data-variant="any"] .handle {
+        background: var(--cooker);
+      }
+      body[data-variant="any"] .whistle-stem,
+      body[data-variant="any"] .whistle-cap {
+        background: var(--accent);
+      }
+      body[data-variant="any"] .steam {
+        border-color: var(--accent);
+      }
+
+      /* DARK */
+      body[data-variant="dark"] .cooker-body,
+      body[data-variant="dark"] .cooker-lid,
+      body[data-variant="dark"] .handle {
+        background: var(--cooker-dark);
+      }
+      body[data-variant="dark"] .whistle-stem,
+      body[data-variant="dark"] .whistle-cap {
+        background: var(--cooker);
+      }
+      body[data-variant="dark"] .steam {
+        border-color: var(--cooker);
+      }
+
+      /* TINTED — everything white on transparent; iOS tints it. */
+      body[data-variant="tinted"] .cooker-body,
+      body[data-variant="tinted"] .cooker-lid,
+      body[data-variant="tinted"] .handle,
+      body[data-variant="tinted"] .whistle-stem,
+      body[data-variant="tinted"] .whistle-cap {
+        background: var(--tint);
+      }
+      body[data-variant="tinted"] .steam {
+        border-color: var(--tint);
+      }
+    </style>
+  </head>
+  <body data-variant="any">
+    <div class="canvas">
+      <div class="steam outer"></div>
+      <div class="steam inner"></div>
+      <div class="whistle-cap"></div>
+      <div class="whistle-stem"></div>
+      <div class="cooker-lid"></div>
+      <div class="cooker-body"></div>
+      <div class="handle handle-left"></div>
+      <div class="handle handle-right"></div>
+    </div>
+    <script>
+      // Set the variant from the URL query: ?variant=any|dark|tinted
+      const params = new URLSearchParams(window.location.search);
+      const variant = params.get("variant") || "any";
+      document.body.setAttribute("data-variant", variant);
+    </script>
+  </body>
+</html>
