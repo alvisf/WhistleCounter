@@ -236,26 +236,53 @@ final class DSPWhistleDetector: WhistleDetector {
 ///
 /// Split out so it can be unit-tested without audio.
 struct WhistleGate {
+    /// Energy ratio at or above which the signal is considered "whistle on".
     var thresholdRatio: Float
+
+    /// How long the signal must stay above threshold before we fire.
     var minDurationSec: Double
+
+    /// Minimum gap between two CONFIRMED whistles — measured from the
+    /// previous fire time. Prevents the same whistle from being
+    /// counted twice even if its amplitude briefly dips and comes back.
     var refractorySec: Double
 
-    /// How long the signal must stay BELOW threshold before we treat
-    /// the current whistle as "ended". This absorbs brief dropouts
-    /// (single-frame noise, buffer edges) that would otherwise split
-    /// one whistle into two.
-    var minGapSec: Double = 0.2
+    /// How long the signal must stay cleanly BELOW `releaseRatio`
+    /// before we consider the current whistle over and arm the gate
+    /// to fire again. Needs to be longer than typical mid-whistle
+    /// amplitude wobbles.
+    var minGapSec: Double = 0.5
 
-    private var activeSinceTime: TimeInterval?
-    private var belowSinceTime: TimeInterval?
+    /// Hysteresis. Once a whistle is firing, we only treat amplitude
+    /// dips as "signal dropped" if they go below this lower ratio.
+    /// Defaults to 60% of the fire threshold.
+    var releaseRatio: Float {
+        thresholdRatio * 0.6
+    }
+
+    /// States:
+    ///  - `.idle`        — waiting for a rise above threshold.
+    ///  - `.pending(start)` — currently above threshold, accumulating
+    ///                        sustain time toward `minDurationSec`.
+    ///  - `.firing(belowSinceTime?)` — we've already fired for this
+    ///                        whistle. We ignore further crossings
+    ///                        until we've been below `releaseRatio`
+    ///                        for a continuous `minGapSec`, at which
+    ///                        point we go back to `.idle`.
+    private enum State {
+        case idle
+        case pending(start: TimeInterval)
+        case firing(belowSince: TimeInterval?)
+    }
+
+    private var state: State = .idle
     private var lastFireTime: TimeInterval = -.infinity
-    private var hasFiredForCurrentBurst: Bool = false
 
     init(
         thresholdRatio: Float,
         minDurationSec: Double,
         refractorySec: Double,
-        minGapSec: Double = 0.2
+        minGapSec: Double = 0.5
     ) {
         self.thresholdRatio = thresholdRatio
         self.minDurationSec = minDurationSec
@@ -264,46 +291,52 @@ struct WhistleGate {
     }
 
     /// Feed one frame's energy ratio in. Returns `true` exactly once
-    /// per detected whistle.
-    ///
-    /// A whistle is defined as a contiguous "above threshold" period
-    /// — with short dropouts of up to `minGapSec` absorbed as part of
-    /// the same whistle. A single burst that lasts 10 seconds still
-    /// counts as one whistle.
+    /// per detected whistle, regardless of its length (1 s or 10 s)
+    /// and regardless of amplitude wobbles within the whistle.
     mutating func process(energyRatio: Float, now: TimeInterval) -> Bool {
-        let aboveThreshold = energyRatio >= thresholdRatio
+        let aboveFire = energyRatio >= thresholdRatio
+        let belowRelease = energyRatio < releaseRatio
 
-        if aboveThreshold {
-            // Signal is above threshold. Cancel any pending "end of
-            // whistle" timer — this keeps the current burst alive
-            // through brief dropouts.
-            belowSinceTime = nil
+        switch state {
+        case .idle:
+            if aboveFire {
+                state = .pending(start: now)
+            }
 
-            if activeSinceTime == nil {
-                activeSinceTime = now
+        case .pending(let start):
+            if aboveFire {
+                let sustained = now - start
+                let sinceLastFire = now - lastFireTime
+                if sustained >= minDurationSec, sinceLastFire >= refractorySec {
+                    lastFireTime = now
+                    state = .firing(belowSince: nil)
+                    return true
+                }
+            } else if belowRelease {
+                // Dropped before we fired — back to idle.
+                state = .idle
             }
-            let sustained = now - (activeSinceTime ?? now)
-            let sinceLastFire = now - lastFireTime
-            if !hasFiredForCurrentBurst,
-               sustained >= minDurationSec,
-               sinceLastFire >= refractorySec {
-                lastFireTime = now
-                hasFiredForCurrentBurst = true
-                return true
-            }
-        } else {
-            // Signal is below threshold. Start (or continue) a "maybe
-            // whistle ended" timer. We only consider the burst over
-            // once we've been below for at least `minGapSec`.
-            if belowSinceTime == nil {
-                belowSinceTime = now
-            }
-            let belowFor = now - (belowSinceTime ?? now)
-            if belowFor >= minGapSec {
-                activeSinceTime = nil
-                hasFiredForCurrentBurst = false
+            // else: between releaseRatio and thresholdRatio, hold.
+
+        case .firing(let belowSince):
+            if belowRelease {
+                // Track how long we've been cleanly below.
+                let since = belowSince ?? now
+                if belowSince == nil {
+                    state = .firing(belowSince: now)
+                } else if now - since >= minGapSec {
+                    // Whistle is truly over, arm for a new one.
+                    state = .idle
+                }
+            } else {
+                // Signal came back up before `minGapSec` elapsed —
+                // treat as still part of the same whistle.
+                if belowSince != nil {
+                    state = .firing(belowSince: nil)
+                }
             }
         }
+
         return false
     }
 }

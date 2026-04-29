@@ -146,4 +146,74 @@ final class WhistleGateTests: XCTestCase {
         fires += run(gate: &gate, ratio: 0.5, seconds: 1.0, startingAt: 1.05)  // continues
         XCTAssertEqual(fires, 1, "A brief dropout in the middle of a whistle must not produce a second count")
     }
+
+    // MARK: - Mid-whistle amplitude wobble (regression test)
+
+    /// Reported in dogfooding: "first whistle counted correctly, but
+    /// the second whistle counted more than once". Cause: real whistles
+    /// have amplitude modulations that briefly cross the single
+    /// threshold, causing the gate to re-arm and re-fire while still
+    /// in the same whistle.
+    func testSecondWhistle_withInternalDip_countsAsOne() {
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5,
+            minGapSec: 0.5
+        )
+        var fires = 0
+        // Whistle 1: 3 s continuous at t=[0, 3].
+        fires += run(gate: &gate, ratio: 0.5, seconds: 3.0, startingAt: 0.0)
+        // Clear silence gap.
+        fires += run(gate: &gate, ratio: 0.0, seconds: 1.0, startingAt: 3.0)
+        // Whistle 2: 5 s total but with a 0.3 s dip to 0.15 (below
+        // the 0.3 fire threshold but NOT below releaseRatio = 0.18).
+        // This is the wobble that used to cause a double-count.
+        fires += run(gate: &gate, ratio: 0.5, seconds: 2.0, startingAt: 4.0)
+        fires += run(gate: &gate, ratio: 0.15, seconds: 0.3, startingAt: 6.0)
+        fires += run(gate: &gate, ratio: 0.5, seconds: 2.0, startingAt: 6.3)
+        XCTAssertEqual(fires, 2)
+    }
+
+    func testSecondWhistle_withDipBelowRelease_butShorterThanMinGap_countsAsOne() {
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5,
+            minGapSec: 0.5
+        )
+        var fires = 0
+        // Whistle 1.
+        fires += run(gate: &gate, ratio: 0.5, seconds: 1.0, startingAt: 0.0)
+        fires += run(gate: &gate, ratio: 0.0, seconds: 0.8, startingAt: 1.0)
+        // Whistle 2: has a real but brief dropout (below release) of
+        // 0.2 s — shorter than minGapSec. Must still be one whistle.
+        fires += run(gate: &gate, ratio: 0.5, seconds: 2.0, startingAt: 1.8)
+        fires += run(gate: &gate, ratio: 0.0, seconds: 0.2, startingAt: 3.8)
+        fires += run(gate: &gate, ratio: 0.5, seconds: 2.0, startingAt: 4.0)
+        XCTAssertEqual(fires, 2)
+    }
+
+    func testThreeRealisticWhistles_eachWithWobble_countsAsThree() {
+        var gate = WhistleGate(
+            thresholdRatio: 0.3,
+            minDurationSec: 0.3,
+            refractorySec: 1.5,
+            minGapSec: 0.5
+        )
+        var fires = 0
+        var t: Double = 0
+
+        for _ in 0..<3 {
+            // Whistle: 3 s, with a mid-whistle wobble to 0.22.
+            fires += run(gate: &gate, ratio: 0.5, seconds: 1.2, startingAt: t)
+            fires += run(gate: &gate, ratio: 0.22, seconds: 0.2, startingAt: t + 1.2)
+            fires += run(gate: &gate, ratio: 0.5, seconds: 1.6, startingAt: t + 1.4)
+            t += 3.0
+            // Silence between whistles.
+            fires += run(gate: &gate, ratio: 0.0, seconds: 1.0, startingAt: t)
+            t += 1.0
+        }
+        XCTAssertEqual(fires, 3)
+    }
 }
