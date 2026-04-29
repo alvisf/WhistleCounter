@@ -61,11 +61,16 @@ final class WhistleSession {
     /// Set by the Recipes tab; cleared when the session is archived.
     var activeRecipeName: String?
 
+    /// Alarm sound that will play when the target is reached. Set by
+    /// `apply(recipe:)`; otherwise falls back to the store's default.
+    var activeAlarmSound: AlarmSound
+
     // MARK: - Collaborators
 
     private let detector: WhistleDetector
     private let historyStore: HistoryStore?
     private let alarm: AlarmPlayer?
+    private let alarmSoundStore: AlarmSoundStore?
     private let clock: () -> Date
 
     private var sessionStartedAt: Date?
@@ -76,11 +81,14 @@ final class WhistleSession {
         detector: WhistleDetector = DSPWhistleDetector(),
         historyStore: HistoryStore? = nil,
         alarm: AlarmPlayer? = nil,
+        alarmSoundStore: AlarmSoundStore? = nil,
         clock: @escaping () -> Date = Date.init
     ) {
         self.detector = detector
         self.historyStore = historyStore
         self.alarm = alarm
+        self.alarmSoundStore = alarmSoundStore
+        self.activeAlarmSound = alarmSoundStore?.defaultSound ?? .default
         self.clock = clock
         self.detector.configure(sensitivity: sensitivity)
         self.detector.onWhistleDetected = { [weak self] in
@@ -122,6 +130,7 @@ final class WhistleSession {
         targetReached = false
         sessionStartedAt = nil
         activeRecipeName = nil
+        activeAlarmSound = alarmSoundStore?.defaultSound ?? .default
         alarm?.stop()
     }
 
@@ -130,11 +139,14 @@ final class WhistleSession {
         alarm?.stop()
     }
 
-    /// Apply a recipe to the current session: sets `targetCount` and
-    /// records the recipe name for history.
+    /// Apply a recipe to the current session: sets `targetCount`, the
+    /// recipe name for history, and the alarm sound override (if any).
     func apply(recipe: Recipe) {
         targetCount = recipe.whistleCount
         activeRecipeName = recipe.name
+        activeAlarmSound = recipe.alarmSound
+            ?? alarmSoundStore?.defaultSound
+            ?? .default
     }
 
     // MARK: - Session lifecycle
@@ -161,7 +173,7 @@ final class WhistleSession {
         history.append(clock())
         if count >= targetCount, !targetReached {
             targetReached = true
-            alarm?.start()
+            alarm?.start(sound: activeAlarmSound)
         }
     }
 

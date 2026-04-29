@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(WhistleSession.self) private var session
+    @Environment(AlarmSoundStore.self) private var alarmSoundStore
 
     private enum Layout {
         static let cardCornerRadius: CGFloat = 12
@@ -12,6 +13,7 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var session = session
+        @Bindable var alarmSoundStore = alarmSoundStore
 
         VStack(alignment: .leading, spacing: Layout.rowSpacing) {
             HStack {
@@ -37,11 +39,51 @@ struct SettingsView: View {
                 }
                 Slider(value: $session.sensitivity, in: Layout.sensitivityRange)
             }
+
+            NavigationLink {
+                AlarmSoundPickerView(
+                    selection: alarmSoundOptionalBinding(
+                        for: $alarmSoundStore.defaultSound
+                    ),
+                    includeDefaultOption: false,
+                    defaultSound: alarmSoundStore.defaultSound
+                )
+            } label: {
+                HStack {
+                    Text("Alarm sound")
+                        .font(.subheadline)
+                    Spacer()
+                    Text(alarmSoundStore.defaultSound.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: Layout.cardCornerRadius)
                 .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    /// The picker works on `Binding<AlarmSound?>`, but the global
+    /// default is non-optional. Bridge the two: write-through drops
+    /// nil assignments (which shouldn't happen when
+    /// `includeDefaultOption: false`).
+    private func alarmSoundOptionalBinding(
+        for source: Binding<AlarmSound>
+    ) -> Binding<AlarmSound?> {
+        Binding(
+            get: { source.wrappedValue },
+            set: { newValue in
+                if let newValue {
+                    source.wrappedValue = newValue
+                }
+            }
         )
     }
 
@@ -56,10 +98,4 @@ struct SettingsView: View {
         default:      "Low"
         }
     }
-}
-
-#Preview {
-    SettingsView()
-        .environment(WhistleSession())
-        .padding()
 }

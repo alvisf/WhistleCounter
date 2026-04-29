@@ -5,8 +5,9 @@ import Foundation
 /// depend on AudioToolbox and can be unit-tested with a mock.
 @MainActor
 protocol AlarmPlayer: AnyObject {
-    /// Begin the alarm. If already playing, this is a no-op.
-    func start()
+    /// Begin the alarm with the given sound. Starting again while
+    /// already playing replaces the current sound.
+    func start(sound: AlarmSound)
 
     /// Stop the alarm. Safe to call even if the alarm is not playing.
     func stop()

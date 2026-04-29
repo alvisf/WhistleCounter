@@ -1,18 +1,27 @@
 import Foundation
 
-/// A recipe prescribes how many whistles a dish needs.
+/// A recipe prescribes how many whistles a dish needs and, optionally,
+/// which alarm sound to play when that target is reached.
 ///
-/// Users can add, edit, or delete recipes. The default recipe set is
-/// re-seeded on a fresh install and can be restored at any time.
+/// `alarmSound == nil` means "use the global default from
+/// `AlarmSoundStore`". Users can add, edit, or delete recipes; the
+/// default set is seeded on first launch and can be restored.
 struct Recipe: Identifiable, Codable, Hashable {
     let id: UUID
     var name: String
     var whistleCount: Int
+    var alarmSound: AlarmSound?
 
-    init(id: UUID = UUID(), name: String, whistleCount: Int) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        whistleCount: Int,
+        alarmSound: AlarmSound? = nil
+    ) {
         self.id = id
         self.name = name
         self.whistleCount = whistleCount
+        self.alarmSound = alarmSound
     }
 }
 

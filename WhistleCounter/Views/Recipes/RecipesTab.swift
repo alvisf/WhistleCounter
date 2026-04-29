@@ -46,13 +46,18 @@ struct RecipesTab: View {
                 }
             }
             .sheet(isPresented: $isAdding) {
-                RecipeEditSheet(recipe: nil) { name, count in
-                    store.add(name: name, whistleCount: count)
+                RecipeEditSheet(recipe: nil) { name, count, sound in
+                    store.add(name: name, whistleCount: count, alarmSound: sound)
                 }
             }
             .sheet(item: $editing) { recipe in
-                RecipeEditSheet(recipe: recipe) { name, count in
-                    store.update(Recipe(id: recipe.id, name: name, whistleCount: count))
+                RecipeEditSheet(recipe: recipe) { name, count, sound in
+                    store.update(Recipe(
+                        id: recipe.id,
+                        name: name,
+                        whistleCount: count,
+                        alarmSound: sound
+                    ))
                 }
             }
         }

@@ -2,21 +2,24 @@ import SwiftUI
 
 /// Add / edit sheet for a recipe. Used in two modes:
 /// - `recipe == nil`: adding a new recipe.
-/// - `recipe != nil`: editing an existing recipe; the closure receives
-///   the new name and whistle count, caller reconstructs the record.
+/// - `recipe != nil`: editing an existing recipe.
 struct RecipeEditSheet: View {
     let recipe: Recipe?
-    let onSave: (String, Int) -> Void
+    let onSave: (String, Int, AlarmSound?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AlarmSoundStore.self) private var alarmSoundStore
+
     @State private var name: String
     @State private var whistleCount: Int
+    @State private var alarmSound: AlarmSound?
 
-    init(recipe: Recipe?, onSave: @escaping (String, Int) -> Void) {
+    init(recipe: Recipe?, onSave: @escaping (String, Int, AlarmSound?) -> Void) {
         self.recipe = recipe
         self.onSave = onSave
         _name = State(initialValue: recipe?.name ?? "")
         _whistleCount = State(initialValue: recipe?.whistleCount ?? 3)
+        _alarmSound = State(initialValue: recipe?.alarmSound)
     }
 
     var body: some View {
@@ -30,6 +33,23 @@ struct RecipeEditSheet: View {
                         in: 1...20
                     )
                 }
+
+                Section("Alarm") {
+                    NavigationLink {
+                        AlarmSoundPickerView(
+                            selection: $alarmSound,
+                            includeDefaultOption: true,
+                            defaultSound: alarmSoundStore.defaultSound
+                        )
+                    } label: {
+                        HStack {
+                            Text("Sound")
+                            Spacer()
+                            Text(alarmSoundLabel)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             .navigationTitle(recipe == nil ? "New recipe" : "Edit recipe")
             .navigationBarTitleDisplayMode(.inline)
@@ -40,7 +60,7 @@ struct RecipeEditSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         let trimmed = name.trimmingCharacters(in: .whitespaces)
-                        onSave(trimmed, whistleCount)
+                        onSave(trimmed, whistleCount, alarmSound)
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -48,14 +68,8 @@ struct RecipeEditSheet: View {
             }
         }
     }
-}
 
-#Preview("New") {
-    RecipeEditSheet(recipe: nil) { _, _ in }
-}
-
-#Preview("Edit") {
-    RecipeEditSheet(
-        recipe: Recipe(name: "Toor dal", whistleCount: 4)
-    ) { _, _ in }
+    private var alarmSoundLabel: String {
+        alarmSound?.displayName ?? "Default"
+    }
 }

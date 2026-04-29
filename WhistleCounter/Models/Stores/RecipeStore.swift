@@ -41,8 +41,12 @@ final class RecipeStore {
 
     // MARK: - Actions
 
-    func add(name: String, whistleCount: Int) {
-        let recipe = Recipe(name: name, whistleCount: whistleCount)
+    func add(name: String, whistleCount: Int, alarmSound: AlarmSound? = nil) {
+        let recipe = Recipe(
+            name: name,
+            whistleCount: whistleCount,
+            alarmSound: alarmSound
+        )
         recipes.append(recipe)
         persist()
     }

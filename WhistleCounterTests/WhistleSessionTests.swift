@@ -32,8 +32,12 @@ final class MockWhistleDetector: WhistleDetector {
 final class MockAlarmPlayer: AlarmPlayer {
     private(set) var startCalls = 0
     private(set) var stopCalls = 0
+    private(set) var lastSoundPlayed: AlarmSound?
 
-    func start() { startCalls += 1 }
+    func start(sound: AlarmSound) {
+        startCalls += 1
+        lastSoundPlayed = sound
+    }
     func stop() { stopCalls += 1 }
 }
 
@@ -381,5 +385,64 @@ final class WhistleSessionTests: XCTestCase {
         mock.fireWhistle()
         session.reset()
         XCTAssertGreaterThanOrEqual(alarm.stopCalls, 1)
+    }
+
+    // MARK: - Alarm sound selection
+
+    func testAlarm_usesGlobalDefaultWhenNoRecipeApplied() {
+        let alarm = MockAlarmPlayer()
+        let store = AlarmSoundStore(defaults: freshDefaults())
+        store.defaultSound = .bell
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(
+            detector: mock,
+            alarm: alarm,
+            alarmSoundStore: store
+        )
+        session.targetCount = 1
+        session.start()
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.lastSoundPlayed, .bell)
+    }
+
+    func testAlarm_usesRecipeSoundWhenRecipeOverrides() {
+        let alarm = MockAlarmPlayer()
+        let store = AlarmSoundStore(defaults: freshDefaults())
+        store.defaultSound = .bell
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(
+            detector: mock,
+            alarm: alarm,
+            alarmSoundStore: store
+        )
+        session.apply(recipe: Recipe(
+            name: "Rajma", whistleCount: 1, alarmSound: .chime
+        ))
+        session.start()
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.lastSoundPlayed, .chime)
+    }
+
+    func testAlarm_fallsBackToDefaultWhenRecipeHasNoOverride() {
+        let alarm = MockAlarmPlayer()
+        let store = AlarmSoundStore(defaults: freshDefaults())
+        store.defaultSound = .glass
+        let mock = MockWhistleDetector()
+        let session = WhistleSession(
+            detector: mock,
+            alarm: alarm,
+            alarmSoundStore: store
+        )
+        session.apply(recipe: Recipe(
+            name: "Rice", whistleCount: 1, alarmSound: nil
+        ))
+        session.start()
+        mock.fireWhistle()
+        XCTAssertEqual(alarm.lastSoundPlayed, .glass)
+    }
+
+    private func freshDefaults() -> UserDefaults {
+        let name = "WhistleSessionTests.\(UUID().uuidString)"
+        return UserDefaults(suiteName: name)!
     }
 }
