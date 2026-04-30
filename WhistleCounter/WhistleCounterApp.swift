@@ -17,7 +17,8 @@ struct WhistleCounterApp: App {
             initialValue: WhistleSession(
                 historyStore: history,
                 alarm: SystemAlarmPlayer(),
-                alarmSoundStore: alarmSounds
+                alarmSoundStore: alarmSounds,
+                notifications: NotificationScheduler()
             )
         )
     }
@@ -30,6 +31,10 @@ struct WhistleCounterApp: App {
                 .environment(history)
                 .environment(alarmSounds)
                 .environment(tabs)
+                .task {
+                    _ = await AudioSessionManager.requestMicPermission()
+                    _ = await NotificationScheduler.requestPermission()
+                }
         }
     }
 }

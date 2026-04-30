@@ -42,19 +42,32 @@ struct CounterView: View {
 
     private var targetPickerView: some View {
         @Bindable var session = session
-        return ZStack {
-            Picker("Target", selection: $session.targetCount) {
-                ForEach(Layout.targetRange, id: \.self) { n in
-                    Text("\(n)").tag(n)
+        return Picker("Target", selection: $session.targetCount) {
+            ForEach(Layout.targetRange, id: \.self) { n in
+                HStack(spacing: 8) {
+                    Text("\(n)")
+                    // Invisible placeholder so each row is the same
+                    // width as the "N Whistle" visual; the real
+                    // "Whistle" word is a static overlay below.
+                    Text("Whistle")
+                        .fontWeight(.semibold)
+                        .hidden()
                 }
+                .tag(n)
             }
-            .pickerStyle(.wheel)
-            .frame(height: Layout.pickerHeight)
-
-            Text(" Whistle")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.leading, 100)
+        }
+        .pickerStyle(.wheel)
+        .frame(width: 180, height: Layout.pickerHeight)
+        .overlay(alignment: .center) {
+            HStack(spacing: 8) {
+                // Spacer the width of the number column so "Whistle"
+                // sits to the right of the selected number.
+                Text("0").hidden()
+                Text("Whistle")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+            }
+            .allowsHitTesting(false)
         }
     }
 

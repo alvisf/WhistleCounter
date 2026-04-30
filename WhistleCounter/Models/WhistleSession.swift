@@ -15,7 +15,7 @@ final class WhistleSession {
 
     private enum Defaults {
         static let targetCount: Int = 3
-        static let sensitivity: Double = 0.5
+        static let sensitivity: Double = 0.25
     }
 
     private enum Limits {
@@ -80,6 +80,7 @@ final class WhistleSession {
     private let historyStore: HistoryStore?
     private let alarm: AlarmPlayer?
     private let alarmSoundStore: AlarmSoundStore?
+    private let notifications: NotificationScheduler?
     private let clock: () -> Date
 
     private var sessionStartedAt: Date?
@@ -91,12 +92,14 @@ final class WhistleSession {
         historyStore: HistoryStore? = nil,
         alarm: AlarmPlayer? = nil,
         alarmSoundStore: AlarmSoundStore? = nil,
+        notifications: NotificationScheduler? = nil,
         clock: @escaping () -> Date = Date.init
     ) {
         self.detector = detector
         self.historyStore = historyStore
         self.alarm = alarm
         self.alarmSoundStore = alarmSoundStore
+        self.notifications = notifications
         self.activeAlarmSound = alarmSoundStore?.defaultSound ?? .default
         self.clock = clock
         self.detector.configure(sensitivity: sensitivity)
@@ -126,6 +129,7 @@ final class WhistleSession {
 
     func stop() {
         alarm?.stop()
+        notifications?.clearDelivered()
         if isListening {
             detector.stop()
             isListening = false
@@ -141,12 +145,11 @@ final class WhistleSession {
         sessionStartedAt = nil
         activeRecipeName = nil
         activeAlarmSound = alarmSoundStore?.defaultSound ?? .default
-        alarm?.stop()
     }
 
     func dismissTargetAlert() {
         targetReached = false
-        alarm?.stop()
+        reset()
     }
 
     /// Apply a recipe to the current session: sets `targetCount`, the
@@ -197,6 +200,10 @@ final class WhistleSession {
             // alarm's .playback session can take over cleanly.
             stopListeningForAlarm()
             alarm?.start(sound: activeAlarmSound)
+            notifications?.postTargetReached(
+                count: count,
+                recipeName: activeRecipeName
+            )
         }
     }
 

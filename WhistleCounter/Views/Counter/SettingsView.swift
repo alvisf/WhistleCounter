@@ -5,7 +5,6 @@ struct SettingsView: View {
     @Environment(AlarmSoundStore.self) private var alarmSoundStore
 
     private enum Layout {
-        static let targetRange: ClosedRange<Int> = 1...20
         static let sensitivityRange: ClosedRange<Double> = 0...1
     }
 
@@ -13,18 +12,25 @@ struct SettingsView: View {
         @Bindable var session = session
         @Bindable var alarmSoundStore = alarmSoundStore
 
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
+            // Sensitivity row
             HStack {
                 Text("Sensitivity")
                     .font(.subheadline)
-                    .foregroundStyle(.gray)
+                    .fixedSize()
                 Slider(value: $session.sensitivity, in: Layout.sensitivityRange)
                 Text(sensitivityLabel(for: session.sensitivity))
                     .font(.caption)
-                    .foregroundStyle(.white)
-                    .frame(width: 60, alignment: .trailing)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 65, alignment: .trailing)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
 
+            Divider()
+                .padding(.leading, 16)
+
+            // Alarm row
             NavigationLink {
                 AlarmSoundPickerView(
                     selection: alarmSoundOptionalBinding(
@@ -37,18 +43,20 @@ struct SettingsView: View {
                 HStack {
                     Text("Alarm")
                         .font(.subheadline)
-                        .foregroundStyle(.gray)
                     Spacer()
                     Text(alarmSoundStore.defaultSound.displayName)
                         .font(.subheadline)
-                        .foregroundStyle(.white)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
         }
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.systemGray6))
+        )
     }
 
     private func alarmSoundOptionalBinding(
