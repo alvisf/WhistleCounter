@@ -17,10 +17,8 @@ struct RootView: View {
             Tab("Recipes", systemImage: "book.pages.fill", value: TabSelection.Tab.recipes) {
                 RecipesTab()
             }
-            Tab("History", systemImage: "clock.arrow.circlepath", value: TabSelection.Tab.history) {
-                HistoryTab()
-            }
         }
+        .preferredColorScheme(.dark)
     }
 }
 

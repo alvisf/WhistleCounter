@@ -5,8 +5,6 @@ struct SettingsView: View {
     @Environment(AlarmSoundStore.self) private var alarmSoundStore
 
     private enum Layout {
-        static let cardCornerRadius: CGFloat = 12
-        static let rowSpacing: CGFloat = 14
         static let targetRange: ClosedRange<Int> = 1...20
         static let sensitivityRange: ClosedRange<Double> = 0...1
     }
@@ -15,29 +13,16 @@ struct SettingsView: View {
         @Bindable var session = session
         @Bindable var alarmSoundStore = alarmSoundStore
 
-        VStack(alignment: .leading, spacing: Layout.rowSpacing) {
+        VStack(spacing: 14) {
             HStack {
-                Text("Target")
+                Text("Sensitivity")
                     .font(.subheadline)
-                Spacer()
-                Stepper(
-                    "\(session.targetCount)",
-                    value: $session.targetCount,
-                    in: Layout.targetRange
-                )
-                .fixedSize()
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Sensitivity")
-                        .font(.subheadline)
-                    Spacer()
-                    Text(sensitivityLabel(for: session.sensitivity))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                    .foregroundStyle(.gray)
                 Slider(value: $session.sensitivity, in: Layout.sensitivityRange)
+                Text(sensitivityLabel(for: session.sensitivity))
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .frame(width: 60, alignment: .trailing)
             }
 
             NavigationLink {
@@ -50,30 +35,22 @@ struct SettingsView: View {
                 )
             } label: {
                 HStack {
-                    Text("Alarm sound")
+                    Text("Alarm")
                         .font(.subheadline)
+                        .foregroundStyle(.gray)
                     Spacer()
                     Text(alarmSoundStore.defaultSound.displayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
                     Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
                 }
             }
             .buttonStyle(.plain)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: Layout.cardCornerRadius)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
-    /// The picker works on `Binding<AlarmSound?>`, but the global
-    /// default is non-optional. Bridge the two: write-through drops
-    /// nil assignments (which shouldn't happen when
-    /// `includeDefaultOption: false`).
     private func alarmSoundOptionalBinding(
         for source: Binding<AlarmSound>
     ) -> Binding<AlarmSound?> {
@@ -87,9 +64,6 @@ struct SettingsView: View {
         )
     }
 
-    /// Maps a sensitivity value in [0, 1] to a human-readable label.
-    /// The slider is reversed in meaning (`0` = most sensitive), which
-    /// is why low values show "Very high".
     private func sensitivityLabel(for value: Double) -> String {
         switch value {
         case ..<0.25: "Very high"

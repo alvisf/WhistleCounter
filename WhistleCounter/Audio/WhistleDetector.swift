@@ -16,6 +16,9 @@ protocol WhistleDetector: AnyObject {
     /// (permission denied, engine failed to start, etc.).
     var onError: ((String) -> Void)? { get set }
 
+    /// True while an audio interruption (e.g. phone call) is active.
+    var isInterrupted: Bool { get }
+
     /// Start listening. Throws if the audio engine can't be started.
     func start() throws
 

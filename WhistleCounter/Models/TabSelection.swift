@@ -8,7 +8,7 @@ import Observation
 @MainActor
 final class TabSelection {
     enum Tab: Hashable {
-        case counter, recipes, history
+        case counter, recipes
     }
 
     var current: Tab = .counter

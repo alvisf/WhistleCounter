@@ -29,15 +29,6 @@ struct RecipesTab: View {
             }
             .navigationTitle("Recipes")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button("Restore defaults", systemImage: "arrow.counterclockwise") {
-                            store.restoreDefaults()
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isAdding = true
@@ -125,12 +116,12 @@ private struct RecipeRow: View {
             Spacer()
             Button(action: onTap) {
                 Image(systemName: "play.fill")
-                    .font(.title3.weight(.semibold))
+                    .font(.body)
                     .foregroundStyle(.green)
                     .frame(width: 44, height: 44)
+                    .background(Color.green.opacity(0.25), in: Circle())
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            .buttonStyle(.plain)
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }

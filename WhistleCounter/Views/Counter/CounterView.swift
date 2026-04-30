@@ -4,42 +4,80 @@ struct CounterView: View {
     @Environment(WhistleSession.self) private var session
 
     private enum Layout {
-        static let countFontSize: CGFloat = 140
-        static let indicatorDotSize: CGFloat = 8
+        static let countFontSize: CGFloat = 90
+        static let pickerHeight: CGFloat = 180
+        static let targetRange = 1...20
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text("Whistles")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("\(session.count)")
-                .font(.system(size: Layout.countFontSize,
-                              weight: .bold,
-                              design: .rounded))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(.bouncy, value: session.count)
-
-            Text("Target: \(session.targetCount)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            if session.isListening {
-                listeningIndicator
-            }
+        if session.isListening || session.count > 0 {
+            activeCountView
+        } else {
+            targetPickerView
         }
     }
 
-    private var listeningIndicator: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(.red)
-                .frame(width: Layout.indicatorDotSize, height: Layout.indicatorDotSize)
-            Text("Listening…")
+    // MARK: - Active: big count display
+
+    private var activeCountView: some View {
+        VStack(spacing: 4) {
+            Text("\(session.count)")
+                .font(.system(size: Layout.countFontSize, weight: .thin))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .animation(.bouncy, value: session.count)
+
+            Text("of \(session.targetCount)")
+                .font(.title3.weight(.thin))
+                .foregroundStyle(.gray)
+
+            statusIndicator
+                .frame(height: 20)
+                .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Idle: scroll wheel picker
+
+    private var targetPickerView: some View {
+        @Bindable var session = session
+        return ZStack {
+            Picker("Target", selection: $session.targetCount) {
+                ForEach(Layout.targetRange, id: \.self) { n in
+                    Text("\(n)").tag(n)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(height: Layout.pickerHeight)
+
+            Text(" Whistle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.leading, 100)
+        }
+    }
+
+    // MARK: - Status indicator
+
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if session.isInterrupted {
+            Label("Mic in use — listening paused", systemImage: "phone.fill")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.orange)
+        } else if session.isListening {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 8, height: 8)
+                Text("Listening…")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+        } else {
+            Text(" ")
+                .font(.caption)
         }
     }
 }
@@ -47,4 +85,5 @@ struct CounterView: View {
 #Preview {
     CounterView()
         .environment(WhistleSession())
+        .background(.black)
 }

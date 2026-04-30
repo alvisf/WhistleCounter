@@ -7,6 +7,7 @@ import XCTest
 final class MockWhistleDetector: WhistleDetector {
     var onWhistleDetected: (() -> Void)?
     var onError: ((String) -> Void)?
+    var isInterrupted: Bool = false
 
     private(set) var startCalls = 0
     private(set) var stopCalls = 0

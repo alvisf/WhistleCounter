@@ -51,6 +51,7 @@ final class DSPWhistleDetector: WhistleDetector {
 
     // MARK: - State
 
+    private(set) var isInterrupted: Bool = false
     private let engine = AVAudioEngine()
 
     /// FFT scratch owned by the detector. Touched only from the audio
@@ -81,6 +82,16 @@ final class DSPWhistleDetector: WhistleDetector {
             count: FFT.size,
             isHalfWindow: false
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - WhistleDetector
@@ -147,6 +158,35 @@ final class DSPWhistleDetector: WhistleDetector {
 
         engine.prepare()
         try engine.start()
+    }
+
+    // MARK: - Interruption handling
+
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+        else { return }
+
+        Task { @MainActor [weak self] in
+            guard let self, self.isRunning else { return }
+            switch type {
+            case .began:
+                self.engine.pause()
+                self.isInterrupted = true
+            case .ended:
+                self.isInterrupted = false
+                let shouldResume = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
+                    .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) }
+                    ?? true
+                if shouldResume {
+                    try? AudioSessionManager.configure()
+                    try? self.engine.start()
+                }
+            @unknown default:
+                break
+            }
+        }
     }
 
     // MARK: - Audio thread

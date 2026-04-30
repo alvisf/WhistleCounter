@@ -38,7 +38,7 @@
       html, body {
         width: var(--size);
         height: var(--size);
-        background: transparent;
+        background: var(--bg-bottom);
       }
 
       .canvas {
@@ -64,7 +64,7 @@
       .cooker-body {
         position: absolute;
         left: 50%;
-        top: 54%;
+        top: 60%;
         transform: translate(-50%, -50%);
         width: 580px;
         height: 400px;
@@ -82,7 +82,7 @@
       .cooker-lid {
         position: absolute;
         left: 50%;
-        top: 39%;
+        top: 45%;
         transform: translate(-50%, -50%);
         width: 640px;
         height: 56px;
@@ -92,7 +92,7 @@
       /* Handles. */
       .handle {
         position: absolute;
-        top: 58%;
+        top: 64%;
         width: 78px;
         height: 36px;
         border-radius: 18px;
@@ -104,7 +104,7 @@
       .whistle-stem {
         position: absolute;
         left: 50%;
-        top: 30%;
+        top: 36%;
         transform: translate(-50%, 0);
         width: 52px;
         height: 92px;
@@ -113,14 +113,16 @@
       .whistle-cap {
         position: absolute;
         left: 50%;
-        top: 29%;
+        top: 35%;
         transform: translate(-50%, -50%);
         width: 112px;
         height: 42px;
         border-radius: 21px;
       }
 
-      /* Steam arcs rendered as bordered half-circles via box-shadow. */
+      /* Steam / sound-wave arcs — iOS 26 "Liquid Glass" style.
+         Each arc is a thick, translucent, frosted stroke with a
+         subtle inner highlight to mimic specular refraction. */
       .steam {
         position: absolute;
         left: 50%;
@@ -128,22 +130,28 @@
         border-radius: 50%;
         background: transparent;
       }
-      .steam.inner {
-        width: 240px;
-        height: 240px;
-        top: 35px;
-        border: 28px solid transparent;
+      .steam.s1 {
+        width: 180px;
+        height: 180px;
+        top: 125px;
+        border: 32px solid transparent;
       }
-      .steam.outer {
-        width: 360px;
-        height: 360px;
-        top: -70px;
-        border: 28px solid transparent;
+      .steam.s2 {
+        width: 300px;
+        height: 300px;
+        top: 50px;
+        border: 30px solid transparent;
       }
-      /* Show only the top portion of each circle by clipping the
-         lower half. Using clip-path for crisp rounded stroke ends. */
-      .steam.inner { clip-path: polygon(0 0, 100% 0, 100% 55%, 0 55%); }
-      .steam.outer { clip-path: polygon(0 0, 100% 0, 100% 55%, 0 55%); }
+      .steam.s3 {
+        width: 420px;
+        height: 420px;
+        top: -25px;
+        border: 26px solid transparent;
+      }
+      /* Clip to top arc only. */
+      .steam.s1 { clip-path: polygon(5% 0, 95% 0, 95% 50%, 5% 50%); }
+      .steam.s2 { clip-path: polygon(5% 0, 95% 0, 95% 50%, 5% 50%); }
+      .steam.s3 { clip-path: polygon(8% 0, 92% 0, 92% 50%, 8% 50%); }
 
       /* ---- Per-variant fills ---- */
 
@@ -162,7 +170,8 @@
         background: linear-gradient(
           180deg,
           var(--cream-top)    0%,
-          var(--cream-mid)   100%
+          var(--cream-mid)   55%,
+          var(--cream-bottom) 100%
         );
       }
       body[data-variant="any"] .handle {
@@ -174,11 +183,19 @@
       }
       body[data-variant="any"] .whistle-stem,
       body[data-variant="any"] .whistle-cap {
-        background: var(--accent);
+        background: var(--cream-top);
       }
       body[data-variant="any"] .steam {
-        border-color: var(--accent);
+        border-color: rgba(255, 255, 255, 0.55);
+        box-shadow:
+          inset 0 0 8px 2px rgba(255, 255, 255, 0.7),
+          0 0 12px 2px rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
       }
+      body[data-variant="any"] .steam.s1 { opacity: 0.95; }
+      body[data-variant="any"] .steam.s2 { opacity: 0.75; }
+      body[data-variant="any"] .steam.s3 { opacity: 0.50; }
 
       /* DARK */
       body[data-variant="dark"] .cooker-body,
@@ -191,8 +208,14 @@
         background: var(--cream-mid);
       }
       body[data-variant="dark"] .steam {
-        border-color: var(--cream-mid);
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow:
+          inset 0 0 8px 2px rgba(255, 255, 255, 0.5),
+          0 0 10px 2px rgba(255, 255, 255, 0.1);
       }
+      body[data-variant="dark"] .steam.s1 { opacity: 0.9; }
+      body[data-variant="dark"] .steam.s2 { opacity: 0.65; }
+      body[data-variant="dark"] .steam.s3 { opacity: 0.40; }
 
       /* TINTED — everything white on transparent; iOS tints it. */
       body[data-variant="tinted"] .cooker-body,
@@ -203,14 +226,18 @@
         background: var(--tint);
       }
       body[data-variant="tinted"] .steam {
-        border-color: var(--tint);
+        border-color: rgba(255, 255, 255, 0.6);
       }
+      body[data-variant="tinted"] .steam.s1 { opacity: 0.95; }
+      body[data-variant="tinted"] .steam.s2 { opacity: 0.7; }
+      body[data-variant="tinted"] .steam.s3 { opacity: 0.45; }
     </style>
   </head>
   <body data-variant="any">
     <div class="canvas">
-      <div class="steam outer"></div>
-      <div class="steam inner"></div>
+      <div class="steam s3"></div>
+      <div class="steam s2"></div>
+      <div class="steam s1"></div>
       <div class="whistle-cap"></div>
       <div class="whistle-stem"></div>
       <div class="cooker-lid"></div>

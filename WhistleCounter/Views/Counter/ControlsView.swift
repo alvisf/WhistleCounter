@@ -1,15 +1,20 @@
 import SwiftUI
 
-/// Clock-app-style Liquid Glass pills: centered label, no icon,
-/// tinted to the button's role (green = start, red = stop).
+/// Clock-app-style stopwatch controls: two large circular buttons
+/// with Reset (gray, left) and Start/Stop (green/red, right).
 struct ControlsView: View {
     @Environment(WhistleSession.self) private var session
 
+    private enum Layout {
+        static let circleSize: CGFloat = 96
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                listenToggleButton
+            HStack {
                 resetButton
+                Spacer()
+                listenToggleButton
             }
             if let error = session.errorMessage {
                 errorLabel(error)
@@ -17,27 +22,31 @@ struct ControlsView: View {
         }
     }
 
-    private var listenToggleButton: some View {
-        Button(action: toggleListening) {
-            Text(listenTitle)
-                .font(.title3.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-        }
-        .buttonStyle(.glass)
-        .tint(session.isListening ? .red : .green)
-        .controlSize(.large)
-    }
-
     private var resetButton: some View {
         Button(action: session.reset) {
             Text("Reset")
-                .font(.title3.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.white)
+                .frame(width: Layout.circleSize, height: Layout.circleSize)
+                .background(Color(.systemGray), in: Circle())
         }
-        .buttonStyle(.glass)
-        .controlSize(.large)
+        .buttonStyle(.plain)
+    }
+
+    private var listenToggleButton: some View {
+        Button(action: toggleListening) {
+            Text(session.isListening ? "Stop" : "Start")
+                .font(.body.weight(.medium))
+                .foregroundStyle(session.isListening ? .red : .green)
+                .frame(width: Layout.circleSize, height: Layout.circleSize)
+                .background(
+                    session.isListening
+                        ? Color.red.opacity(0.3)
+                        : Color.green.opacity(0.3),
+                    in: Circle()
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func errorLabel(_ message: String) -> some View {
@@ -45,10 +54,6 @@ struct ControlsView: View {
             .font(.caption)
             .foregroundStyle(.red)
             .multilineTextAlignment(.center)
-    }
-
-    private var listenTitle: String {
-        session.isListening ? "Stop" : "Start"
     }
 
     private func toggleListening() {

@@ -32,6 +32,9 @@ final class WhistleSession {
     /// Whether the detector is actively listening.
     private(set) var isListening: Bool = false
 
+    /// True while an audio interruption (e.g. phone call) is pausing detection.
+    var isInterrupted: Bool { detector.isInterrupted }
+
     /// User-facing error message, if any (e.g. mic permission denied).
     private(set) var errorMessage: String?
 

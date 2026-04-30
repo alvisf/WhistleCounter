@@ -9,13 +9,8 @@ Built in SwiftUI with `AVAudioEngine` + `vDSP` for real-time FFT. All
 processing is on-device — no accounts, no cloud, no telemetry.
 
 <p align="center">
-  <img src="docs/screenshots/01-counter-light.png" width="240" alt="Counter tab" />
-  <img src="docs/screenshots/02-recipes-light.png" width="240" alt="Recipes tab" />
-  <img src="docs/screenshots/03-history-light.png" width="240" alt="History tab" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/01-counter-dark.png" width="240" alt="Counter tab — dark mode" />
+  <img src="docs/screenshots/01-counter-idle.png" width="240" alt="Counter — whistle picker" />
+  <img src="docs/screenshots/04-app-icon.png" width="240" alt="App icon on home screen" />
 </p>
 
 ## Features
@@ -23,29 +18,36 @@ processing is on-device — no accounts, no cloud, no telemetry.
 - **Automatic whistle detection** — FFT-based band-energy detector
   filters out clicks, dropouts, and amplitude wobbles so a single
   long whistle counts as one, not many.
+- **Clock-style UI** — scroll wheel to set the target whistle count,
+  circular Start/Stop and Reset buttons, session history below the
+  counter — all in a dark theme inspired by the iOS Clock app.
 - **Recipes** — built-in list of common dishes (rice, dal, rajma,
   curry, chickpeas, potatoes…) with whistle counts. Tap a recipe to
   apply it and start listening in one step. Add, edit, and delete
-  your own recipes; "Restore defaults" brings back the seed list.
+  your own recipes.
 - **Per-recipe alarm sounds** — pick one of five system sounds
   (Tri-tone, Bell, Chime, Glass, Alert) as the global default, or
   override it per recipe. Two-second looping preview in the picker.
 - **Session history** — every finished session is saved locally
-  (count, duration, recipe name, date). Swipe-to-delete per row or
-  "Clear all".
+  (count, duration, recipe name, date) and shown below the counter.
+  Swipe-to-delete per row or "Clear all".
+- **Audio interruption handling** — if a phone call comes in while
+  listening, detection pauses automatically and shows a warning
+  banner. When the call ends, listening resumes — no user action
+  needed.
 - **Looping alarm with haptics** — when the target is reached the
   phone plays the selected sound on a loop with heavy-impact haptics
   and overrides the silent switch, so you'll hear it from across the
   kitchen. Tap OK, Stop, or Reset to silence it.
-- **Dark mode** — follows the system appearance with a dedicated
-  dark app-icon variant.
+- **Dark mode** — always-dark UI with a dedicated dark app-icon
+  variant and iOS 26 Liquid Glass-style sound wave arcs on the icon.
 - **Local-only storage** — recipes and history live in the app's
   sandbox as plain JSON. Uninstall = your data is gone.
 
 ## Requirements
 
 - Xcode 16 or later
-- iOS 18.0 or later on the device / simulator
+- iOS 26.0 or later on the device / simulator
 - [xcodegen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 
 ## Build
@@ -118,9 +120,9 @@ WhistleCounter/
 ├── Models/                 # WhistleSession, Recipe, SessionRecord
 │   └── Stores/             # JSON-backed recipe + history stores
 ├── Views/
-│   ├── Counter/            # Counter tab (big number + controls)
+│   ├── Counter/            # Counter tab (picker + controls + history)
 │   ├── Recipes/            # Recipes tab + edit sheet
-│   ├── History/            # History tab
+│   ├── History/            # HistoryTab (legacy, merged into Counter)
 │   └── AlarmSoundPickerView.swift
 ├── Assets.xcassets/        # App icon (any/dark/tinted variants)
 └── WhistleCounterApp.swift # App entry
